@@ -62,13 +62,6 @@ npm start
 - Filter dashboard -- guru cuma liat kelasnya
 - Rekap absensi per tanggal
 
-### Mungkin Gapernah Dibikin
-
-- Reset password lewat email
-- Multi-sekolah dalam 1 instance
-- Self-scan siswa (kiosk mode)
-- Backup otomatis
-
 ---
 
 ## Stack
