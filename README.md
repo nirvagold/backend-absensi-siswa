@@ -1,4 +1,4 @@
-# Backend Absensi Siswa
+# Sistem Informasi Absensi Siswa Berbasis Web dengan Integrasi QR Code, Notifikasi WhatsApp, dan Dashboard Analitik
 
 Sistem Informasi Absensi Siswa Berbasis Web dengan Integrasi QR Code, Notifikasi WhatsApp, dan Dashboard Analitik pada SDN 2 Garumukti
 
