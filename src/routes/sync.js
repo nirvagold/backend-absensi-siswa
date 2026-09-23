@@ -57,7 +57,7 @@ async function syncPesertaDidik(rows, sekolahId, syncId) {
   return { baru, update, gagal, total: rows.length };
 }
 
-async function syncPengguna(rows, syncId) {
+async function syncPengguna(rows, sekolahId, syncId) {
   let baru = 0, update = 0, gagal = 0;
   const hash = await bcrypt.hash("dapodik123", 12);
 
@@ -73,7 +73,7 @@ async function syncPengguna(rows, syncId) {
       if (!ada) {
         await prisma.users.create({
           data: {
-            sekolah_id: row.sekolah_id,
+            sekolah_id: sekolahId,
             username: row.username,
             password_hash: hash,
             nama: row.nama,
@@ -141,7 +141,7 @@ router.post("/", adminAuth, async (req, res) => {
 
     if (tipe === "pengguna" || tipe === "all") {
       const rows = await panggilDapodik(baseUrl, "getPengguna", { npsn }, token);
-      const hasil = await syncPengguna(rows, syncLog.sync_id);
+      const hasil = await syncPengguna(rows, req.user.sekolah_id, syncLog.sync_id);
     }
 
     if (tipe === "rombongan_belajar" || tipe === "all") {
