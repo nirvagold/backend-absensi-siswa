@@ -111,4 +111,45 @@ router.get("/tren", auth, async (req, res) => {
   }
 });
 
+// GET /api/dashboard/per-kelas
+router.get("/per-kelas", auth, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const besok = new Date(today);
+    besok.setDate(besok.getDate() + 1);
+
+    const kelasList = await prisma.siswa.groupBy({
+      by: ["nama_rombel"],
+      where: { sekolah_id: req.user.sekolah_id, is_active: true, nama_rombel: { not: null } },
+      _count: { peserta_didik_id: true },
+      orderBy: { nama_rombel: "asc" },
+    });
+
+    const rows = [];
+    for (const k of kelasList) {
+      const hadirCount = await prisma.absensi.count({
+        where: {
+          tanggal: { gte: today, lt: besok },
+          status: { not: "Tidak Hadir" },
+          siswa: { nama_rombel: k.nama_rombel },
+        },
+      });
+
+      rows.push({
+        nama_rombel: k.nama_rombel,
+        total_siswa: k._count.peserta_didik_id,
+        hadir: hadirCount,
+        persentase: k._count.peserta_didik_id > 0
+          ? +((hadirCount / k._count.peserta_didik_id) * 100).toFixed(1)
+          : 0,
+      });
+    }
+
+    res.json(dapodikResponse(rows, { idField: "nama_rombel" }));
+  } catch (err) {
+    res.status(500).json(errorResponse("Gagal ambil per-kelas", "INTERNAL_ERROR", 500));
+  }
+});
+
 module.exports = router;
