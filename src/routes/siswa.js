@@ -2,6 +2,7 @@ const router = require("express").Router();
 const prisma = require("../config/prisma");
 const { authMiddleware } = require("../middleware/auth");
 const { dapodikResponse, errorResponse } = require("../utils/response");
+const crypto = require("crypto");
 
 const auth = authMiddleware();
 
