@@ -73,7 +73,7 @@ router.post("/", auth, async (req, res) => {
 
     const siswa = await prisma.siswa.create({
       data: {
-        peserta_didik_id: req.body.peserta_didik_id || undefined,
+        peserta_didik_id: req.body.peserta_didik_id || crypto.randomUUID(),
         sekolah_id: req.user.sekolah_id,
         nisn,
         nama,
