@@ -1,6 +1,6 @@
 # Backend Absensi Siswa
 
-Backend absen pake QR. Data siswa dari Dapodik.
+Sistem Informasi Absensi Siswa Berbasis Web dengan Integrasi QR Code, Notifikasi WhatsApp, dan Dashboard Analitik pada SDN 2 Garumukti
 
 ## API
 
@@ -112,8 +112,8 @@ src/
 
 2. Set environment variable di Vercel:
    - `DAPODIK_NGROK_URL` = url ngrok
-   - `DAPODIK_TOKEN` = `0B5EHd1bAQzakEI`
-   - `DAPODIK_NPSN` = `20208854`
+   - `DAPODIK_TOKEN` = `AI kampret, malah munculin token disini --`
+   - `DAPODIK_NPSN` = `ehehehe aahahahaha siyappp`
 
 3. Hit endpoint:
    ```bash
