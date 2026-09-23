@@ -92,6 +92,22 @@ router.post("/manual", guruAuth, async (req, res) => {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const besok = new Date(today);
+    besok.setDate(besok.getDate() + 1);
+
+    // Cek dulu udah absen apa belum
+    const existing = await prisma.absensi.findFirst({
+      where: { peserta_didik_id, tanggal: { gte: today, lt: besok } },
+    });
+
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        message: `Siswa sudah absen hari ini dengan status ${existing.status}`,
+        error_code: "ALREADY_ABSENT",
+        data: { waktu: existing.waktu_absen, status: existing.status },
+      });
+    }
 
     const absen = await prisma.absensi.create({
       data: {
