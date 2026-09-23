@@ -2,15 +2,9 @@ const router = require("express").Router();
 const prisma = require("../config/prisma");
 const { authMiddleware } = require("../middleware/auth");
 const { dapodikResponse, errorResponse } = require("../utils/response");
-const crypto = require("crypto");
 
 const auth = authMiddleware();
 const guruAuth = authMiddleware(["Admin", "Guru"]);
-
-// md5 hash
-function md5(s) {
-  return crypto.createHash("md5").update(String(s)).digest("hex");
-}
 
 // POST /api/absensi/scan
 router.post("/scan", guruAuth, async (req, res) => {
@@ -20,9 +14,10 @@ router.post("/scan", guruAuth, async (req, res) => {
       return res.status(400).json(errorResponse("Kode QR wajib diisi", "VALIDATION_ERROR"));
     }
 
-    // Cari siswa berdasarkan md5(nisn)
-    const semuaSiswa = await prisma.siswa.findMany({ where: { is_active: true } });
-    const siswa = semuaSiswa.find((s) => md5(s.nisn) === kode);
+    // Cari siswa langsung pake peserta_didik_id
+    const siswa = await prisma.siswa.findUnique({
+      where: { peserta_didik_id: kode },
+    });
 
     if (!siswa) {
       return res.status(404).json(errorResponse("QR Code tidak dikenali. Siswa tidak ditemukan", "STUDENT_NOT_FOUND", 404));

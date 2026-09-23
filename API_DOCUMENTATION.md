@@ -195,7 +195,7 @@ POST /api/absensi/scan
 
 | Field | Wajib | Keterangan |
 |-------|-------|------------|
-| `kode` | ✅ Ya | md5(NISN) — hasil scan QR |
+| `kode` | ✅ Ya | `peserta_didik_id` (UUID) — hasil scan QR, langsung dari kartu |
 | `sesi_id` | ❌ Tidak | ID sesi absensi (opsional) |
 
 **Response Sukses (200):**
@@ -545,8 +545,8 @@ Semua endpoint list (`/api/siswa`, `/api/absensi`) punya pagination di response:
 
 ---
 
-> **QR Code:** Berisi md5(NISN). Contoh: NISN `3173959741` → QR = `md5("3173959741")`.
+> **QR Code:** Berisi `peserta_didik_id` (UUID langsung dari Dapodik). Contoh: `56d41d62-5d64-4e99-b081-00820cd9ea3d`
 >
 > Library scanner: [html5-qrcode](https://www.npmjs.com/package/html5-qrcode) atau [vue-qrcode-reader](https://www.npmjs.com/package/vue-qrcode-reader).
 >
-> Format capture hasil scan: `{ kode: "md5-hash" }` → POST ke `/api/absensi/scan`.
+> Format capture hasil scan: `{ kode: "56d41d62-..." }` → POST ke `/api/absensi/scan`.
