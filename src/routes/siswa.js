@@ -45,9 +45,10 @@ router.get("/", auth, async (req, res) => {
       ];
     }
     if (kelas) where.nama_rombel = kelas;
-    // Guru cuma liat kelasnya sendiri
+    // Guru cuma liat kelasnya sendiri (bisa multi kelas)
     if (req.user.peran_id_str === "Guru" && req.user.nama_rombel) {
-      where.nama_rombel = req.user.nama_rombel;
+      const kelasGuru = req.user.nama_rombel.split(", ").filter(Boolean);
+      where.nama_rombel = kelasGuru.length > 1 ? { in: kelasGuru } : kelasGuru[0];
     }
 
     const [total, siswa] = await Promise.all([

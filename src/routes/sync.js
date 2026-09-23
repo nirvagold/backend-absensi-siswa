@@ -101,9 +101,14 @@ async function syncRombel(rows) {
       // Cari user berdasarkan ptk_id
       const user = await prisma.users.findFirst({ where: { ptk_id: row.ptk_id } });
       if (user && user.peran_id_str === "Guru") {
+        const kelasSekarang = user.nama_rombel || "";
+        const kelasList = kelasSekarang.split(", ").filter(Boolean);
+        if (!kelasList.includes(row.nama)) {
+          kelasList.push(row.nama);
+        }
         await prisma.users.update({
           where: { pengguna_id: user.pengguna_id },
-          data: { nama_rombel: row.nama },
+          data: { nama_rombel: kelasList.join(", ") },
         });
         cocok++;
       }

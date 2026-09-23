@@ -139,7 +139,8 @@ router.get("/hari-ini", auth, async (req, res) => {
 
     let whereAbsen = { tanggal: { gte: today, lt: besok } };
     if (req.user.peran_id_str === "Guru" && req.user.nama_rombel) {
-      whereAbsen.siswa = { nama_rombel: req.user.nama_rombel };
+      const kelasGuru = req.user.nama_rombel.split(", ").filter(Boolean);
+      whereAbsen.siswa = { nama_rombel: kelasGuru.length > 1 ? { in: kelasGuru } : kelasGuru[0] };
     }
 
     const absensi = await prisma.absensi.findMany({

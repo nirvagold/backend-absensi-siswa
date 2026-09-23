@@ -16,15 +16,21 @@ router.get("/ringkasan", auth, async (req, res) => {
     const where = { tanggal: { gte: today, lt: besok }, sekolah_id: req.user.sekolah_id };
 
     const kelasFilter = req.user.peran_id_str === "Guru" && req.user.nama_rombel
-      ? { nama_rombel: req.user.nama_rombel } : {};
+      ? req.user.nama_rombel.split(", ").length > 1
+        ? { nama_rombel: { in: req.user.nama_rombel.split(", ") } }
+        : { nama_rombel: req.user.nama_rombel }
+      : {};
+
+    const whereAbsenKelas = kelasFilter.nama_rombel
+      ? { siswa: { nama_rombel: kelasFilter.nama_rombel } }
+      : {};
 
     const [total_siswa, absensi] = await Promise.all([
       prisma.siswa.count({ where: { sekolah_id: req.user.sekolah_id, is_active: true, ...kelasFilter } }),
       prisma.absensi.findMany({
         where: {
           ...where,
-          ...(kelasFilter.nama_rombel ? { siswa: { nama_rombel: kelasFilter.nama_rombel } } : {}),
-        },
+          ...whereAbsenKelas,
       }),
     ]);
 
