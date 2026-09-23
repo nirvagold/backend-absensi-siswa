@@ -57,6 +57,7 @@ async function main() {
       password_hash: passGuru,
       nama: "Guru SDN 2 Garumukti",
       peran_id_str: "Guru",
+      nama_rombel: "KELAS 3A",
     },
   });
 

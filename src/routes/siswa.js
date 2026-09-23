@@ -34,7 +34,7 @@ router.get("/", auth, async (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
     const skip = (page - 1) * limit;
     const search = req.query.search || "";
-    const kelas = req.query.kelas || "";
+    const kelas = req.query.kelas || req.user.nama_rombel || "";
 
     const where = { is_active: true };
     if (search) {
@@ -45,6 +45,10 @@ router.get("/", auth, async (req, res) => {
       ];
     }
     if (kelas) where.nama_rombel = kelas;
+    // Guru cuma liat kelasnya sendiri
+    if (req.user.peran_id_str === "Guru" && req.user.nama_rombel) {
+      where.nama_rombel = req.user.nama_rombel;
+    }
 
     const [total, siswa] = await Promise.all([
       prisma.siswa.count({ where }),

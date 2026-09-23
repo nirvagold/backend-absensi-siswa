@@ -37,6 +37,7 @@ function generateToken(user) {
       nama: user.nama,
       peran_id_str: user.peran_id_str,
       sekolah_id: user.sekolah_id,
+      nama_rombel: user.nama_rombel || null,
     },
     JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || "2h" }

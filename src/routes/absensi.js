@@ -137,8 +137,13 @@ router.get("/hari-ini", auth, async (req, res) => {
     const besok = new Date(today);
     besok.setDate(besok.getDate() + 1);
 
+    let whereAbsen = { tanggal: { gte: today, lt: besok } };
+    if (req.user.peran_id_str === "Guru" && req.user.nama_rombel) {
+      whereAbsen.siswa = { nama_rombel: req.user.nama_rombel };
+    }
+
     const absensi = await prisma.absensi.findMany({
-      where: { tanggal: { gte: today, lt: besok } },
+      where: whereAbsen,
       include: { siswa: { select: { nama: true, nisn: true, nama_rombel: true } } },
       orderBy: { waktu_absen: "asc" },
     });
