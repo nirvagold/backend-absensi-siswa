@@ -1,36 +1,36 @@
-# API Documentation — Backend Absensi QR
+# API Documentation
 
-> **Base URL:** `https://backend-absensi-siswa-mu.vercel.app`
->
-> Semua response mengikuti **format Dapodik**: `{ results, id, start, limit, rows }`
->
-> Field names: **snake_case**, suffix `_str` untuk display value.
+Base URL: `https://backend-absensi-siswa-mu.vercel.app`
+
+Semua response pake format Dapodik: `{ results, id, start, limit, rows }`
+
+Field names: snake_case, suffix `_str` buat display value.
 
 ---
 
 ## Daftar Isi
 
-- [Autentikasi](#1-autentikasi)
-- [Data Siswa](#2-data-siswa)
+- [Auth](#1-auth)
+- [Siswa](#2-siswa)
+- [Kartu QR](#3-kartu-qr)
 - [Absensi](#4-absensi)
 - [Dashboard](#5-dashboard)
 - [Sync Dapodik](#6-sync-dapodik)
-- [Error Codes](#7-error-codes)
-- [Akun Test](#8-akun-test)
+- [Notifikasi](#7-notifikasi)
+- [Error Codes](#8-error-codes)
+- [Akun Test](#9-akun-test)
+- [Axios Setup](#10-axios-setup)
 
 ---
 
-## 1. Autentikasi
+## 1. Auth
 
 ### Login
-
-Mendapatkan JWT token untuk akses endpoint lain.
 
 ```
 POST /api/auth/login
 ```
 
-**Request Body:**
 ```json
 {
   "username": "admin@sekolah.sch.id",
@@ -38,13 +38,11 @@ POST /api/auth/login
 }
 ```
 
-**Response Sukses (200):**
+**Response (200):**
 ```json
 {
   "results": 1,
   "id": "pengguna_id",
-  "start": 0,
-  "limit": 1,
   "rows": {
     "pengguna_id": "892042b2-...",
     "username": "admin@sekolah.sch.id",
@@ -56,7 +54,7 @@ POST /api/auth/login
 }
 ```
 
-**Response Gagal (401):**
+**Error (401):**
 ```json
 {
   "success": false,
@@ -65,38 +63,28 @@ POST /api/auth/login
 }
 ```
 
-> **⚠️ Wajib:** Setiap request (kecuali login) harus menyertakan header:
+> Pake header ini di setiap request kecuali login:
 > ```
 > Authorization: Bearer {token}
 > ```
 
-### Profil Saya
+### Profil
 
 ```
 GET /api/auth/me
 ```
 
-**Response:**
-```json
-{
-  "results": 1,
-  "id": "pengguna_id",
-  "start": 0,
-  "limit": 1,
-  "rows": {
-    "pengguna_id": "892042b2-...",
-    "username": "admin@sekolah.sch.id",
-    "nama": "Admin SDN 2 Garumukti",
-    "peran_id_str": "Admin",
-    "sekolah_id": "3c6b9c9d-...",
-    "nomor_telepon_seluler": null
-  }
-}
+### Logout
+
 ```
+POST /api/auth/logout
+```
+
+Hapus token di frontend.
 
 ---
 
-## 2. Data Siswa
+## 2. Siswa
 
 ### Daftar Siswa
 
@@ -104,28 +92,22 @@ GET /api/auth/me
 GET /api/siswa
 ```
 
-**Query Parameters:**
-
 | Parameter | Tipe | Default | Keterangan |
 |-----------|------|---------|------------|
 | `page` | int | 1 | Halaman |
 | `limit` | int | 20 | Max 100 |
 | `search` | string | - | Cari nama / NISN / NIPD |
-| `kelas` | string | - | Filter nama_rombel (KELAS 1A) |
-| `tingkat` | string | - | Filter tingkat_pendidikan_id (1-6) |
+| `kelas` | string | - | Filter kelas (KELAS 3A) |
 
 **Response:**
 ```json
 {
   "results": 301,
   "id": "peserta_didik_id",
-  "start": 0,
-  "limit": 3,
   "rows": [
     {
       "peserta_didik_id": "56d41d62-5d64-4e99-b081-00820cd9ea3d",
       "nisn": "3173959741",
-      "nipd": "2425012611",
       "nama": "ANNASYA AZRA IZZATUNNISA",
       "jenis_kelamin": "P",
       "nik": "3205345711170002",
@@ -137,16 +119,14 @@ GET /api/siswa
       "nama_ibu": "Cucu Ningsih",
       "nama_rombel": "KELAS 3A",
       "tingkat_pendidikan_id": "3",
-      "nomor_telepon_seluler": null,
-      "foto_url": null,
-      "is_active": true
+      "nomor_telepon_seluler": null
     }
   ],
   "pagination": {
     "page": 1,
-    "limit": 3,
+    "limit": 20,
     "total": 301,
-    "total_pages": 101
+    "total_pages": 16
   }
 }
 ```
@@ -163,7 +143,6 @@ GET /api/siswa/:peserta_didik_id
 POST /api/siswa
 ```
 
-**Request Body:**
 ```json
 {
   "nisn": "3173959741",
@@ -173,40 +152,101 @@ POST /api/siswa
 }
 ```
 
+### Update Siswa
+
+```
+PUT /api/siswa/:peserta_didik_id
+```
+
+```json
+{
+  "nama": "Nama Baru",
+  "nama_rombel": "KELAS 4A"
+}
+```
+
+### Hapus Siswa (soft delete)
+
+```
+DELETE /api/siswa/:peserta_didik_id
+```
+
+### Export CSV
+
+```
+GET /api/siswa/export
+```
+
+Return file CSV, langsung bisa di-download.
+
+---
+
+## 3. Kartu QR
+
+### Kartu 1 Siswa
+
+```
+GET /api/siswa/:peserta_didik_id/kartu-qr
+```
+
+Return PDF kartu ukuran CR-80 (85.6x54mm) dengan QR Code.
+QR berisi `peserta_didik_id` (UUID).
+
+### Kartu Bulk (banyak siswa)
+
+```
+POST /api/siswa/kartu-qr/bulk
+```
+
+Request (pilih salah satu):
+```json
+{
+  "siswa_ids": ["uuid-1", "uuid-2", "uuid-3"]
+}
+```
+
+Atau filter kelas:
+```json
+{
+  "kelas": "KELAS 3A"
+}
+```
+
+Return PDF berisi banyak kartu (1 halaman = 1 kartu).
+
+**QR Code di kartu:** berisi `peserta_didik_id` (UUID langsung dari Dapodik).
+Contoh: `56d41d62-5d64-4e99-b081-00820cd9ea3d`
+Library scanner: `html5-qrcode` atau `vue-qrcode-reader`.
+
 ---
 
 ## 4. Absensi
 
 ### Scan QR
 
-Mencatat absensi berdasarkan scan QR Code.
-
 ```
 POST /api/absensi/scan
 ```
 
-**Request Body:**
 ```json
 {
-  "kode": "md5-hash-of-nisn",
+  "kode": "56d41d62-5d64-4e99-b081-00820cd9ea3d",
   "sesi_id": "uuid-sesi-aktif"
 }
 ```
 
 | Field | Wajib | Keterangan |
 |-------|-------|------------|
-| `kode` | ✅ Ya | `peserta_didik_id` (UUID) — hasil scan QR, langsung dari kartu |
-| `sesi_id` | ❌ Tidak | ID sesi absensi (opsional) |
+| `kode` | Ya | peserta_didik_id hasil scan QR |
+| `sesi_id` | Tidak | ID sesi absensi |
 
-**Response Sukses (200):**
+**Sukses (200):**
 ```json
 {
   "results": 1,
   "id": "absensi_id",
-  "start": 0,
-  "limit": 1,
   "rows": {
-    "absensi_id": "uuid-absensi-456",
+    "absensi_id": "uuid",
     "peserta_didik_id": "56d41d62-...",
     "nisn": "3173959741",
     "nama": "ANNASYA AZRA IZZATUNNISA",
@@ -219,20 +259,16 @@ POST /api/absensi/scan
 }
 ```
 
-**Response Duplikat (409):**
+**Duplikat (409):**
 ```json
 {
   "success": false,
   "message": "Siswa sudah absen hari ini pukul 07:12",
-  "error_code": "ALREADY_ABSENT",
-  "data": {
-    "waktu": "2026-09-24T07:12:30.000Z",
-    "status": "Hadir"
-  }
+  "error_code": "ALREADY_ABSENT"
 }
 ```
 
-**Response Siswa Tidak Ditemukan (404):**
+**Tidak ditemukan (404):**
 ```json
 {
   "success": false,
@@ -243,13 +279,10 @@ POST /api/absensi/scan
 
 ### Absen Manual
 
-Untuk input manual (izin, sakit, telat).
-
 ```
 POST /api/absensi/manual
 ```
 
-**Request Body:**
 ```json
 {
   "peserta_didik_id": "56d41d62-...",
@@ -258,11 +291,9 @@ POST /api/absensi/manual
 }
 ```
 
-Status yang valid: `Hadir`, `Terlambat`, `Izin`, `Sakit`, `Tidak Hadir`
+Status valid: `Hadir`, `Terlambat`, `Izin`, `Sakit`, `Tidak Hadir`
 
 ### Absensi Hari Ini
-
-Mendapatkan daftar absensi hari ini (real-time).
 
 ```
 GET /api/absensi/hari-ini
@@ -274,58 +305,35 @@ GET /api/absensi/hari-ini
 GET /api/absensi
 ```
 
-**Query Parameters:**
-
 | Parameter | Tipe | Default | Keterangan |
 |-----------|------|---------|------------|
 | `page` | int | 1 | |
 | `limit` | int | 50 | Max 200 |
 | `tanggal_mulai` | date | - | YYYY-MM-DD |
-| `tanggal_selesai` | date | - | YYYY-MM-DD |
-| `kelas` | string | - | Filter nama_rombel |
+| `tanggal_selesai` | date | - | |
+| `kelas` | string | - | Filter kelas |
 | `status` | string | - | Filter status |
 
-**Response:**
-```json
-{
-  "results": 50,
-  "id": "absensi_id",
-  "start": 0,
-  "limit": 50,
-  "rows": [
-    {
-      "absensi_id": "uuid",
-      "peserta_didik_id": "uuid",
-      "nisn": "3173959741",
-      "nama": "ANNASYA AZRA IZZATUNNISA",
-      "nama_rombel": "KELAS 3A",
-      "tanggal": "2026-09-24",
-      "waktu_absen": "2026-09-24T07:12:30.000Z",
-      "status": "Hadir",
-      "metode": "scan"
-    }
-  ],
-  "pagination": { "page": 1, "limit": 50, "total": 150, "total_pages": 3 }
-}
+### Riwayat Per Siswa
+
+```
+GET /api/absensi/siswa/:peserta_didik_id
 ```
 
 ---
 
 ## 5. Dashboard
 
-### Ringkasan Hari Ini
+### Ringkasan
 
 ```
 GET /api/dashboard/ringkasan
 ```
 
-**Response:**
 ```json
 {
   "results": 1,
   "id": "tanggal",
-  "start": 0,
-  "limit": 1,
   "rows": {
     "tanggal": "2026-09-24",
     "total_siswa": 301,
@@ -339,43 +347,38 @@ GET /api/dashboard/ringkasan
 }
 ```
 
-Tampilan di Frontend:
+### Tren Kehadiran
+
 ```
-┌──────────────────────────────────────┐
-│  📅 24 September 2026                │
-│                                      │
-│  TOTAL      HADIR     TERLAMBAT      │
-│   301       280          5           │
-│                                      │
-│  IZIN      SAKIT     TIDAK HADIR     │
-│    3         2           12          │
-│                                      │
-│  ✅ Kehadiran: 92.72%               │
-└──────────────────────────────────────┘
+GET /api/dashboard/tren
 ```
 
-### Siswa Bermasalah (Flagging Alfa)
+Return 7 hari terakhir.
+
+```json
+{
+  "results": 7,
+  "id": "tanggal",
+  "rows": [
+    { "tanggal": "2026-09-18", "hadir": 289, "persentase": 95.7 },
+    { "tanggal": "2026-09-19", "hadir": 275, "persentase": 91.1 }
+  ]
+}
+```
+
+### Siswa Bermasalah
 
 ```
 GET /api/dashboard/siswa-bermasalah
 ```
 
-Menampilkan siswa dengan alfa >= 3 kali.
+Siswa dengan alfa >= 3.
 
-**Response:**
 ```json
 {
   "results": 5,
-  "id": "peserta_didik_id",
-  "start": 0,
-  "limit": 20,
   "rows": [
-    {
-      "peserta_didik_id": "uuid",
-      "nama": "Budi Santoso",
-      "nama_rombel": "KELAS 5A",
-      "total_alfa": 12
-    }
+    { "peserta_didik_id": "uuid", "nama": "Budi", "nama_rombel": "KELAS 5A", "total_alfa": 12 }
   ]
 }
 ```
@@ -384,27 +387,24 @@ Menampilkan siswa dengan alfa >= 3 kali.
 
 ## 6. Sync Dapodik
 
-### Mulai Sinkronisasi
+### Mulai Sync
 
 ```
 POST /api/sync/dapodik
 ```
 
-**Request Body:**
 ```json
 {
   "npsn": "20208854",
-  "ngrok_url": "https://lyricism-simplify-crate.ngrok-free.dev"
+  "ngrok_url": "https://xxxx.ngrok-free.dev"
 }
 ```
 
-**Response (sync butuh waktu ~2 menit untuk 302 siswa):**
+Response (process ~2 menit untuk 302 siswa):
+
 ```json
 {
   "results": 1,
-  "id": "sync_id",
-  "start": 0,
-  "limit": 1,
   "rows": {
     "sync_id": "6e9ca1c2-...",
     "status": "berhasil",
@@ -418,7 +418,7 @@ POST /api/sync/dapodik
 }
 ```
 
-### Cek Status Sync
+### Status Sync
 
 ```
 GET /api/sync/dapodik/status/:sync_id
@@ -432,23 +432,34 @@ GET /api/sync/dapodik/history
 
 ---
 
-## 7. Error Codes
+## 7. Notifikasi
+
+### Log WA
+
+```
+GET /api/notifikasi/log
+```
+
+(Backend belum kirim WA beneran, tinggal nunggu token Meta API.)
+
+---
+
+## 8. Error Codes
 
 | Code | Status | Pesan |
 |------|--------|-------|
-| `INVALID_CREDENTIALS` | 401 | Username atau password salah |
-| `TOKEN_EXPIRED` | 401 | Sesi telah berakhir, login ulang |
-| `TOKEN_MISSING` | 401 | Token tidak ditemukan |
-| `FORBIDDEN_ACCESS` | 403 | Tidak punya akses |
-| `STUDENT_NOT_FOUND` | 404 | Siswa tidak ditemukan |
-| `ALREADY_ABSENT` | 409 | Sudah absen hari ini |
-| `DAPODIK_CONNECTION_ERROR` | 502 | Gagal konek Dapodik |
-| `DAPODIK_CONFIG_MISSING` | 400 | URL/token Dapodik belum diatur |
-| `VALIDATION_ERROR` | 400 | Data tidak valid |
-| `SISWA_ALREADY_EXISTS` | 409 | NISN sudah terdaftar |
-| `RATE_LIMIT_EXCEEDED` | 429 | Terlalu banyak request |
+| INVALID_CREDENTIALS | 401 | Username atau password salah |
+| TOKEN_EXPIRED | 401 | Sesi berakhir, login ulang |
+| TOKEN_MISSING | 401 | Token tidak ditemukan |
+| FORBIDDEN_ACCESS | 403 | Tidak punya akses |
+| STUDENT_NOT_FOUND | 404 | Siswa tidak ditemukan |
+| ALREADY_ABSENT | 409 | Sudah absen hari ini |
+| DAPODIK_CONNECTION_ERROR | 502 | Gagal konek Dapodik |
+| VALIDATION_ERROR | 400 | Data tidak valid |
+| SISWA_ALREADY_EXISTS | 409 | NISN sudah terdaftar |
+| RATE_LIMIT_EXCEEDED | 429 | Terlalu banyak request |
 
-**Format Error Global:**
+**Format error:**
 ```json
 {
   "success": false,
@@ -462,18 +473,16 @@ GET /api/sync/dapodik/history
 
 ---
 
-## 8. Akun Test
+## 9. Akun Test
 
 | Role | Username | Password |
 |------|----------|----------|
-| Admin | `admin@sekolah.sch.id` | `admin123` |
-| Guru | `guru@sekolah.sch.id` | `guru123` |
+| Admin | admin@sekolah.sch.id | admin123 |
+| Guru | guru@sekolah.sch.id | guru123 |
 
 ---
 
-## Tips untuk Frontend
-
-### Axios Setup
+## 10. Axios Setup
 
 ```javascript
 import axios from 'axios';
@@ -482,14 +491,12 @@ const api = axios.create({
   baseURL: 'https://backend-absensi-siswa-mu.vercel.app',
 });
 
-// Auto-attach JWT
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Handle 401 — redirect ke login
 api.interceptors.response.use(
   res => res,
   err => {
@@ -504,7 +511,7 @@ api.interceptors.response.use(
 export default api;
 ```
 
-### Cara Pake
+**Contoh pake:**
 
 ```javascript
 // Login
@@ -514,39 +521,20 @@ const { data } = await api.post('/api/auth/login', {
 });
 localStorage.setItem('token', data.rows.token);
 
-// Ambil daftar siswa
+// Daftar siswa
 const siswa = await api.get('/api/siswa?limit=20&kelas=KELAS%203A');
-console.log(siswa.data.rows); // array siswa
 
-// Kirim scan QR
+// Scan QR (kode = peserta_didik_id hasil QR)
 const absen = await api.post('/api/absensi/scan', {
-  kode: md5('3173959741') // hasil dari library QR scanner
+  kode: '56d41d62-5d64-4e99-b081-00820cd9ea3d'
 });
 
 // Dashboard
 const dash = await api.get('/api/dashboard/ringkasan');
-console.log(dash.data.rows); // { total_siswa, hadir, ... }
+
+// Download kartu PDF
+window.open('https://backend-absensi-siswa-mu.vercel.app/api/siswa/{id}/kartu-qr');
+
+// Export CSV
+window.open('https://backend-absensi-siswa-mu.vercel.app/api/siswa/export');
 ```
-
-### Response Pagination
-
-Semua endpoint list (`/api/siswa`, `/api/absensi`) punya pagination di response:
-
-```json
-{
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 301,
-    "total_pages": 16
-  }
-}
-```
-
----
-
-> **QR Code:** Berisi `peserta_didik_id` (UUID langsung dari Dapodik). Contoh: `56d41d62-5d64-4e99-b081-00820cd9ea3d`
->
-> Library scanner: [html5-qrcode](https://www.npmjs.com/package/html5-qrcode) atau [vue-qrcode-reader](https://www.npmjs.com/package/vue-qrcode-reader).
->
-> Format capture hasil scan: `{ kode: "56d41d62-..." }` → POST ke `/api/absensi/scan`.
