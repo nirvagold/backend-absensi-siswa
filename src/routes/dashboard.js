@@ -31,6 +31,7 @@ router.get("/ringkasan", auth, async (req, res) => {
         where: {
           ...where,
           ...whereAbsenKelas,
+        },
       }),
     ]);
 
