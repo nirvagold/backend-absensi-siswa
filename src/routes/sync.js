@@ -120,7 +120,7 @@ router.post("/", adminAuth, async (req, res) => {
     const npsn = req.body.npsn || process.env.DAPODIK_NPSN;
     const baseUrl = req.body.ngrok_url || process.env.DAPODIK_NGROK_URL;
     const token = req.body.token || process.env.DAPODIK_TOKEN;
-    const tipe = req.body.tipe || "peserta_didik";
+    const tipe = req.body.tipe || "all";
 
     if (!npsn || !baseUrl || !token) {
       return res.status(400).json(errorResponse("npsn, URL, dan token Dapodik wajib diisi", "VALIDATION_ERROR"));
