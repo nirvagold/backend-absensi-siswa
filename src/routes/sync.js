@@ -27,7 +27,6 @@ router.post("/", adminAuth, async (req, res) => {
     });
 
     // Panggil endpoint Dapodik
-    const token = process.env.DAPODIK_TOKEN;
     try {
       const response = await axios.get(`${baseUrl}/WebService/getPesertaDidik`, {
         params: { npsn },
