@@ -1046,9 +1046,20 @@ POST /api/sync/dapodik
 ```json
 {
   "npsn": "20208854",
-  "ngrok_url": "https://lyricism-simplify-crate.ngrok-free.dev"
+  "ngrok_url": "https://lyricism-simplify-crate.ngrok-free.dev",
+  "token": "0B5EHd1bAQzakEI",
+  "tipe": "all"
 }
 ```
+
+**Tipe sync:**
+
+| Tipe | Fungsi |
+|------|--------|
+| `all` (default) | Ambil siswa + buat akun guru + set wali kelas |
+| `peserta_didik` | Data siswa doang |
+| `pengguna` | Bikin akun guru/kepsek dari Dapodik |
+| `rombongan_belajar` | Set wali kelas dari rombel |
 
 **Response (langsung balik):**
 
@@ -1065,13 +1076,15 @@ POST /api/sync/dapodik
 }
 ```
 
-Ini bakal proses ~2 menit untuk 302 siswa. **Yang perlu frontend lakuin: polling.**
+Ini bakal proses ~2 menit untuk 302 siswa + 8 akun guru + 12 wali kelas. **Yang perlu frontend lakuin: polling.**
 
 ```javascript
 // 1. Mulai sync
 const sync = await api.post('/api/sync/dapodik', {
   npsn: '20208854',
-  ngrok_url: 'https://lyricism-simplify-crate.ngrok-free.dev'
+  ngrok_url: 'https://lyricism-simplify-crate.ngrok-free.dev',
+  token: '0B5EHd1bAQzakEI',
+  tipe: 'all'
 });
 const syncId = sync.data.rows.sync_id;
 

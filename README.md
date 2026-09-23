@@ -22,10 +22,17 @@ npm start
 
 ### Akun Test
 
-| Role | Username | Password |
-| --- | --- | --- |
-| Admin | `admin@sekolah.sch.id` | `admin123` |
-| Guru | `guru@sekolah.sch.id` | `guru123` |
+| Role | Username | Password | Kelas |
+| --- | --- | --- | --- |
+| Admin | `admin@sekolah.sch.id` | `admin123` | Semua |
+| Guru | `guru@sekolah.sch.id` | `guru123` | KELAS 3A |
+| Wali Kelas 1 | `idahsr@gmail.com` | `dapodik123` | 1A, 1B |
+| Wali Kelas 2 | `elisnina293@gmail.com` | `dapodik123` | 2A, 2B |
+| Wali Kelas 3 | `satap2pamulihan@gmail.com` | `dapodik123` | 3A, 3B |
+| Wali Kelas 4 | `rukmaredza@gmail.com` | `dapodik123` | 4A, 4B |
+| Wali Kelas 5 | `ratihsetiasih45@gmail.com` | `dapodik123` | 5A, 5B |
+| Wali Kelas 6 | `ayidadang1967@gmail.com` | `dapodik123` | 6A, 6B |
+| Kepsek | `atepsuherman6747@gmail.com` | `dapodik123` | Read Only |
 
 ---
 
@@ -37,17 +44,23 @@ npm start
 - Format response ala Dapodik (results, rows, snake_case)
 - Login pake JWT, RBAC (Admin/Guru/Kepsek)
 - CRUD data siswa -- 301 siswa dari Dapodik
-- Sync Dapodik via ngrok
+- Sync Dapodik all (peserta didik + pengguna + rombongan belajar)
+- Akun guru otomatis dari Dapodik (password: dapodik123)
+- Guru wali multi kelas (1 guru bisa pegang >1 kelas)
+- Generate kartu PDF + QR (single & bulk)
 - Scan QR absen (peserta_didik_id) + cegah double absen
 - Absen manual (izin/sakit/telat)
 - Riwayat absensi (filter tanggal, kelas, status)
+- Riwayat per siswa
 - Dashboard ringkasan hari ini
+- Dashboard tren 7 hari
+- Dashboard per-kelas (12 kelas)
 - Flagging siswa bermasalah (alfa >= 3)
-- CI workflow (Prisma generate)
+- Export CSV
+- CI workflow
 - Seed data (admin+guru)
-- Error codes 18 macam + format error global
-- Notifikasi log (tabel doang, kirim WA belum)
-- Deploy ke Vercel
+- Error codes lengkap
+- Notifikasi log
 
 ### Skip dulu
 
@@ -105,14 +118,20 @@ src/
    ```
    Dapet url kaya `https://xxxx.ngrok-free.dev`
 
-2. Set environment variable di Vercel:
-   - `DAPODIK_NGROK_URL` = url ngrok
-   - `DAPODIK_TOKEN` = `AI kampret, malah munculin token disini --`
-   - `DAPODIK_NPSN` = `ehehehe aahahahaha siyappp`
-
-3. Hit endpoint:
+2. Hit endpoint:
    ```bash
    POST /api/sync/dapodik
+   Body: {
+     "ngrok_url": "https://xxxx.ngrok-free.dev",
+     "token": "0B5EHd1bAQzakEI",
+     "tipe": "all"
+   }
    ```
 
-   ~2 menit, 302 siswa masuk sendiri.
+   Tipe sync:
+   - `all` (default) -- ambil siswa, buat akun guru, set wali kelas
+   - `peserta_didik` -- data siswa doang
+   - `pengguna` -- akun guru/kepsek doang
+   - `rombongan_belajar` -- wali kelas doang
+
+   ~2 menit, 302 siswa + 8 akun guru + 12 wali kelas masuk.
