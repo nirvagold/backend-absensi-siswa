@@ -986,7 +986,32 @@ GET /api/dashboard/tren
 
 **Catatan:** Persentase 0 artinya hari libur / minggu / belum ada absensi.
 
-### 5.3 Siswa Bermasalah (Flagging)
+### 5.3 Rekap Per Kelas
+
+**Endpoint:**
+
+```
+GET /api/dashboard/per-kelas
+```
+
+**Header:** `Authorization: Bearer {token}`
+
+**Response 200:**
+
+```json
+{
+  "results": 12,
+  "id": "nama_rombel",
+  "start": 0,
+  "limit": 20,
+  "rows": [
+    { "nama_rombel": "KELAS 1A", "total_siswa": 27, "hadir": 25, "persentase": 92.6 },
+    { "nama_rombel": "KELAS 1B", "total_siswa": 27, "hadir": 24, "persentase": 88.9 }
+  ]
+}
+```
+
+### 5.4 Siswa Bermasalah (Flagging)
 
 Siswa yang sering alfa (total alfa >= 3).
 
