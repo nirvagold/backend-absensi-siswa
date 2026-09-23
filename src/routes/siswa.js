@@ -59,6 +59,82 @@ router.get("/:id", auth, async (req, res) => {
   }
 });
 
+// PUT /api/siswa/:id
+router.put("/:id", auth, async (req, res) => {
+  try {
+    const { nisn, nama, jenis_kelamin, ...rest } = req.body;
+    const existing = await prisma.siswa.findUnique({ where: { peserta_didik_id: req.params.id } });
+    if (!existing) {
+      return res.status(404).json(errorResponse("Siswa tidak ditemukan", "STUDENT_NOT_FOUND", 404));
+    }
+
+    if (nisn && nisn !== existing.nisn) {
+      const nisnExists = await prisma.siswa.findUnique({ where: { nisn } });
+      if (nisnExists) {
+        return res.status(409).json(errorResponse("NISN sudah terdaftar", "SISWA_ALREADY_EXISTS", 409));
+      }
+    }
+
+    const data = {};
+    if (nisn) data.nisn = nisn;
+    if (nama) data.nama = nama;
+    if (jenis_kelamin) data.jenis_kelamin = jenis_kelamin;
+    Object.assign(data, rest);
+
+    const siswa = await prisma.siswa.update({
+      where: { peserta_didik_id: req.params.id },
+      data,
+    });
+
+    res.json(dapodikResponse(siswa, { idField: "peserta_didik_id", limit: 1 }));
+  } catch (err) {
+    console.error("Siswa update error:", err);
+    res.status(500).json(errorResponse("Gagal mengupdate siswa", "INTERNAL_ERROR", 500));
+  }
+});
+
+// DELETE /api/siswa/:id
+router.delete("/:id", auth, async (req, res) => {
+  try {
+    const existing = await prisma.siswa.findUnique({ where: { peserta_didik_id: req.params.id } });
+    if (!existing) {
+      return res.status(404).json(errorResponse("Siswa tidak ditemukan", "STUDENT_NOT_FOUND", 404));
+    }
+
+    // Soft delete
+    await prisma.siswa.update({
+      where: { peserta_didik_id: req.params.id },
+      data: { is_active: false },
+    });
+
+    res.json({ success: true, message: "Siswa berhasil dinonaktifkan" });
+  } catch (err) {
+    console.error("Siswa delete error:", err);
+    res.status(500).json(errorResponse("Gagal menghapus siswa", "INTERNAL_ERROR", 500));
+  }
+});
+
+// GET /api/siswa/export
+router.get("/export", auth, async (req, res) => {
+  try {
+    const siswa = await prisma.siswa.findMany({
+      where: { is_active: true, sekolah_id: req.user.sekolah_id },
+      orderBy: { nama: "asc" },
+    });
+
+    const header = "peserta_didik_id,nisn,nipd,nama,jenis_kelamin,nama_rombel,tingkat_pendidikan_id,nomor_telepon_seluler";
+    const rows = siswa.map(s =>
+      `${s.peserta_didik_id},${s.nisn},${s.nipd||""},"${s.nama}",${s.jenis_kelamin},${s.nama_rombel||""},${s.tingkat_pendidikan_id||""},${s.nomor_telepon_seluler||""}`
+    ).join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=siswa.csv");
+    res.send(header + "\n" + rows);
+  } catch (err) {
+    res.status(500).json(errorResponse("Gagal export data siswa", "INTERNAL_ERROR", 500));
+  }
+});
+
 // POST /api/siswa
 router.post("/", auth, async (req, res) => {
   try {

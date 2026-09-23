@@ -206,4 +206,19 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
+// GET /api/absensi/siswa/:id
+router.get("/siswa/:id", auth, async (req, res) => {
+  try {
+    const absensi = await prisma.absensi.findMany({
+      where: { peserta_didik_id: req.params.id },
+      orderBy: { tanggal: "desc" },
+      take: 30,
+    });
+
+    res.json(dapodikResponse(absensi, { idField: "absensi_id" }));
+  } catch (err) {
+    res.status(500).json(errorResponse("Gagal mengambil riwayat", "INTERNAL_ERROR", 500));
+  }
+});
+
 module.exports = router;

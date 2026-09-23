@@ -72,4 +72,35 @@ router.get("/siswa-bermasalah", auth, async (req, res) => {
   }
 });
 
+// GET /api/dashboard/tren
+router.get("/tren", auth, async (req, res) => {
+  try {
+    const now = new Date();
+    const data = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const tgl = new Date(now);
+      tgl.setDate(tgl.getDate() - i);
+      tgl.setHours(0, 0, 0, 0);
+      const besok = new Date(tgl);
+      besok.setDate(besok.getDate() + 1);
+
+      const total = await prisma.siswa.count({ where: { sekolah_id: req.user.sekolah_id, is_active: true } });
+      const hadirCount = await prisma.absensi.count({
+        where: { sekolah_id: req.user.sekolah_id, tanggal: { gte: tgl, lt: besok }, status: { not: "Tidak Hadir" } },
+      });
+
+      data.push({
+        tanggal: tgl.toISOString().split("T")[0],
+        hadir: hadirCount,
+        persentase: total > 0 ? +((hadirCount / total) * 100).toFixed(1) : 0,
+      });
+    }
+
+    res.json(dapodikResponse(data, { idField: "tanggal" }));
+  } catch (err) {
+    res.status(500).json(errorResponse("Gagal ambil tren", "INTERNAL_ERROR", 500));
+  }
+});
+
 module.exports = router;

@@ -68,4 +68,9 @@ router.get("/me", authMiddleware(), async (req, res) => {
   }
 });
 
+// POST /api/auth/logout
+router.post("/logout", authMiddleware(), async (req, res) => {
+  res.json({ success: true, message: "Logout berhasil" });
+});
+
 module.exports = router;
