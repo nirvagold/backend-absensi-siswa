@@ -42,6 +42,7 @@ model users {
   password_hash         String
   nama                  String
   peran_id_str          String
+	  ptk_id                String?
 	  nama_rombel           String?
   nomor_telepon_seluler String?
   is_active             Boolean  @default(true)
