@@ -12,11 +12,9 @@ router.post("/", adminAuth, async (req, res) => {
     const npsn = req.body.npsn || process.env.DAPODIK_NPSN;
     const tipe = req.body.tipe || "peserta_didik";
     const baseUrl = req.body.ngrok_url || process.env.DAPODIK_NGROK_URL;
-    if (!npsn || !baseUrl) {
-      return res.status(400).json(errorResponse("npsn dan URL Dapodik wajib diisi", "VALIDATION_ERROR"));
-    }
-    if (!baseUrl) {
-      return res.status(400).json(errorResponse("URL Dapodik belum dikonfigurasi", "DAPODIK_CONFIG_MISSING"));
+    const token = req.body.token || process.env.DAPODIK_TOKEN;
+    if (!npsn || !baseUrl || !token) {
+      return res.status(400).json(errorResponse("npsn, URL, dan token Dapodik wajib diisi", "VALIDATION_ERROR"));
     }
 
     // Buat log sinkronisasi
