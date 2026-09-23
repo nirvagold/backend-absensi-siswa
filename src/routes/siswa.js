@@ -6,6 +6,27 @@ const crypto = require("crypto");
 
 const auth = authMiddleware();
 
+// GET /api/siswa/export (harus sebelum /:id biar ga bentrok)
+router.get("/export", auth, async (req, res) => {
+  try {
+    const siswa = await prisma.siswa.findMany({
+      where: { is_active: true, sekolah_id: req.user.sekolah_id },
+      orderBy: { nama: "asc" },
+    });
+
+    const header = "peserta_didik_id,nisn,nipd,nama,jenis_kelamin,nama_rombel,tingkat_pendidikan_id,nomor_telepon_seluler";
+    const rows = siswa.map(s =>
+      `${s.peserta_didik_id},${s.nisn},${s.nipd||""},"${s.nama}",${s.jenis_kelamin},${s.nama_rombel||""},${s.tingkat_pendidikan_id||""},${s.nomor_telepon_seluler||""}`
+    ).join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=siswa.csv");
+    res.send(header + "\n" + rows);
+  } catch (err) {
+    res.status(500).json(errorResponse("Gagal export data siswa", "INTERNAL_ERROR", 500));
+  }
+});
+
 // GET /api/siswa
 router.get("/", auth, async (req, res) => {
   try {
@@ -111,27 +132,6 @@ router.delete("/:id", auth, async (req, res) => {
   } catch (err) {
     console.error("Siswa delete error:", err);
     res.status(500).json(errorResponse("Gagal menghapus siswa", "INTERNAL_ERROR", 500));
-  }
-});
-
-// GET /api/siswa/export
-router.get("/export", auth, async (req, res) => {
-  try {
-    const siswa = await prisma.siswa.findMany({
-      where: { is_active: true, sekolah_id: req.user.sekolah_id },
-      orderBy: { nama: "asc" },
-    });
-
-    const header = "peserta_didik_id,nisn,nipd,nama,jenis_kelamin,nama_rombel,tingkat_pendidikan_id,nomor_telepon_seluler";
-    const rows = siswa.map(s =>
-      `${s.peserta_didik_id},${s.nisn},${s.nipd||""},"${s.nama}",${s.jenis_kelamin},${s.nama_rombel||""},${s.tingkat_pendidikan_id||""},${s.nomor_telepon_seluler||""}`
-    ).join("\n");
-
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", "attachment; filename=siswa.csv");
-    res.send(header + "\n" + rows);
-  } catch (err) {
-    res.status(500).json(errorResponse("Gagal export data siswa", "INTERNAL_ERROR", 500));
   }
 });
 
