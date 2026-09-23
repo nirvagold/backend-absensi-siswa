@@ -38,7 +38,7 @@ npm start
 - Login pake JWT, RBAC (Admin/Guru/Kepsek)
 - CRUD data siswa -- 301 siswa dari Dapodik
 - Sync Dapodik via ngrok
-- Scan QR absen (md5 nisn) + cegah double absen
+- Scan QR absen (peserta_didik_id) + cegah double absen
 - Absen manual (izin/sakit/telat)
 - Riwayat absensi (filter tanggal, kelas, status)
 - Dashboard ringkasan hari ini
@@ -49,18 +49,13 @@ npm start
 - Notifikasi log (tabel doang, kirim WA belum)
 - Deploy ke Vercel
 
-### Belum
+### Skip dulu
 
-- Generate kartu PDF + QR (masih di PRD doang)
-- Kirim WA ke orang tua (Meta API)
-- Refresh token + logout
-- Rate limiting
-- Sesi absensi (buka/tutup sesi)
-- Dashboard tren mingguan + rekap per kelas
-- Update & delete siswa
-- Export CSV
-- Filter dashboard -- guru cuma liat kelasnya
-- Rekap absensi per tanggal
+- Kirim WA ke orang tua -- butuh setup akun WhatsApp Business
+- Sesi absensi (buka/tutup sesi) -- fitur tambahan, P2
+- Rekap absensi per tanggal -- kecil, tinggal nambah endpoint
+- Multi-sekolah -- kalo mau dipake sekolah lain
+- Rate limiting -- biar ga ditembak orang iseng
 
 ---
 
