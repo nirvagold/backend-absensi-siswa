@@ -9,3 +9,5 @@ generate-*.js
 *.ai
 .DS_Store
 .claude/buat-laporan.js
+.claude/
+buat-laporan.js
