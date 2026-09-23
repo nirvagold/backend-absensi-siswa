@@ -1,0 +1,30 @@
+name: CI - Backend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-db:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install
+        run: npm ci
+
+      - name: Prisma Generate (validasi schema otomatis)
+        run: npx prisma generate --schema=src/prisma/schema.prisma
+
+      - name: Check
+        run: |
+          echo "✅ Prisma schema valid"
+          echo "✅ Dependencies terinstall"
+          echo "✅ Siap deploy"

@@ -1,0 +1,35 @@
+{
+  "name": "backend-absensi-siswa",
+  "version": "1.0.0",
+  "description": "Backend Absensi Siswa Berbasis QR/Barcode - Terintegrasi Dapodik",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "build": "npx prisma generate --schema=src/prisma/schema.prisma",
+    "db:push": "npx prisma db push --schema=src/prisma/schema.prisma --skip-generate",
+    "db:seed": "node src/prisma/seed.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+  },
+  "keywords": [
+    "absensi",
+    "qrcode",
+    "dapodik",
+    "sekolah"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "axios": "^1.7.7",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "prisma": "^5.20.0"
+  }
+}

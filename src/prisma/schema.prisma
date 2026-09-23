@@ -1,0 +1,172 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model sekolah {
+  sekolah_id               String @id @default(uuid()) @map("sekolah_id")
+  npsn                     String @unique
+  nama                     String
+  nss                      String?
+  alamat_jalan             String?
+  rt                       String?
+  rw                       String?
+  desa_kelurahan           String?
+  kecamatan                String?
+  kabupaten_kota           String?
+  provinsi                 String?
+  kode_pos                 String?
+  nomor_telepon            String?
+  email                    String?
+  bentuk_pendidikan_id_str String?
+  status_sekolah_str       String?
+  logo_url                 String?
+
+  users        users[]
+  siswa        siswa[]
+  sesi_absensi sesi_absensi[]
+  absensi      absensi[]
+  sync_log     sync_log[]
+
+  @@map("sekolah")
+}
+
+model users {
+  pengguna_id           String   @id @default(uuid()) @map("pengguna_id")
+  sekolah_id            String
+  username              String   @unique
+  password_hash         String
+  nama                  String
+  peran_id_str          String
+  nomor_telepon_seluler String?
+  is_active             Boolean  @default(true)
+  last_login            DateTime?
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  sekolah     sekolah        @relation(fields: [sekolah_id], references: [sekolah_id])
+  absensi     absensi[]
+  sesi_absensi sesi_absensi[]
+
+  @@map("users")
+}
+
+model siswa {
+  peserta_didik_id      String    @id @map("peserta_didik_id")
+  sekolah_id            String
+  nisn                  String    @unique
+  nipd                  String?
+  nama                  String
+  jenis_kelamin         String
+  nik                   String?
+  tempat_lahir          String?
+  tanggal_lahir         DateTime?
+  agama_id_str          String?
+  alamat_jalan          String?
+  rt                    String?
+  rw                    String?
+  nama_ayah             String?
+  nama_ibu              String?
+  nama_rombel           String?
+  tingkat_pendidikan_id String?
+  nomor_telepon_seluler String?
+  foto_url              String?
+  is_active             Boolean   @default(true)
+  sync_id               String?
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+
+  sekolah sekolah @relation(fields: [sekolah_id], references: [sekolah_id])
+  absensi absensi[]
+
+  @@index([nama_rombel])
+  @@index([sekolah_id])
+  @@map("siswa")
+}
+
+model sesi_absensi {
+  sesi_id     String    @id @default(uuid()) @map("sesi_id")
+  sekolah_id  String
+  judul       String?
+  status      String    @default("aktif")
+  dibuka_oleh String
+  waktu_buka  DateTime  @default(now())
+  waktu_tutup DateTime?
+  created_at  DateTime  @default(now())
+
+  sekolah sekolah @relation(fields: [sekolah_id], references: [sekolah_id])
+  pembuka users   @relation(fields: [dibuka_oleh], references: [pengguna_id])
+  absensi absensi[]
+
+  @@index([sekolah_id, status])
+  @@map("sesi_absensi")
+}
+
+model absensi {
+  absensi_id       String   @id @default(uuid()) @map("absensi_id")
+  peserta_didik_id String
+  sekolah_id       String
+  tanggal          DateTime
+  waktu_absen      DateTime @default(now())
+  status           String
+  sesi_id          String?
+  metode           String
+  keterangan       String?
+  petugas_id       String
+  created_at       DateTime @default(now())
+
+  siswa            siswa          @relation(fields: [peserta_didik_id], references: [peserta_didik_id])
+  sekolah          sekolah        @relation(fields: [sekolah_id], references: [sekolah_id])
+  sesi             sesi_absensi?  @relation(fields: [sesi_id], references: [sesi_id])
+  petugas          users          @relation(fields: [petugas_id], references: [pengguna_id])
+  notifikasi_log   notifikasi_log[]
+
+  @@unique([peserta_didik_id, tanggal])
+  @@index([tanggal])
+  @@index([sekolah_id, tanggal])
+  @@index([sesi_id])
+  @@index([status])
+  @@map("absensi")
+}
+
+model sync_log {
+  sync_id         String    @id @default(uuid()) @map("sync_id")
+  sekolah_id      String
+  tipe            String    @default("peserta_didik")
+  status          String    @default("berjalan")
+  total_data      Int       @default(0)
+  data_baru       Int       @default(0)
+  data_diperbarui Int       @default(0)
+  data_gagal      Int       @default(0)
+  log_error       String?
+  waktu_mulai     DateTime  @default(now())
+  waktu_selesai   DateTime?
+  dieksekusi_oleh String
+
+  sekolah sekolah @relation(fields: [sekolah_id], references: [sekolah_id])
+
+  @@index([sekolah_id, status])
+  @@map("sync_log")
+}
+
+model notifikasi_log {
+  notifikasi_id String   @id @default(uuid()) @map("notifikasi_id")
+  absensi_id    String
+  nomor_tujuan  String
+  pesan         String
+  status        String   @default("pending")
+  error_message String?
+  retry_count   Int      @default(0)
+  waktu_dikirim DateTime?
+  created_at    DateTime @default(now())
+
+  absensi absensi @relation(fields: [absensi_id], references: [absensi_id])
+
+  @@index([absensi_id])
+  @@index([status])
+  @@map("notifikasi_log")
+}

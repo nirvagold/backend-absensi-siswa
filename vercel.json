@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "functions": {
+    "src/index.js": {
+      "maxDuration": 10
+    }
+  },
+  "routes": [
+    { "src": "/(.*)", "dest": "src/index.js" }
+  ]
+}
