@@ -61,7 +61,7 @@ router.get("/:id", auth, async (req, res) => {
 // POST /api/siswa
 router.post("/", auth, async (req, res) => {
   try {
-    const { peserta_didik_id, nisn, nama, jenis_kelamin, ...rest } = req.body;
+    const { nisn, nama, jenis_kelamin, ...rest } = req.body;
     if (!nisn || !nama || !jenis_kelamin) {
       return res.status(400).json(errorResponse("nisn, nama, jenis_kelamin wajib diisi", "VALIDATION_ERROR"));
     }
@@ -73,7 +73,8 @@ router.post("/", auth, async (req, res) => {
 
     const siswa = await prisma.siswa.create({
       data: {
-        peserta_didik_id: peserta_didik_id || undefined,
+        peserta_didik_id: req.body.peserta_didik_id || undefined,
+        sekolah_id: req.user.sekolah_id,
         nisn,
         nama,
         jenis_kelamin,
