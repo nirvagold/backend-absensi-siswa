@@ -11,3 +11,4 @@ generate-*.js
 .claude/buat-laporan.js
 .claude/
 buat-laporan.js
+gen-doc-v12.js
