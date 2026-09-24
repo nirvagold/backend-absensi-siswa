@@ -30,7 +30,7 @@ app.use("/api/siswa", require("./routes/siswa")); // /:id
 app.use("/api/absensi", require("./routes/absensi"));
 app.use("/api/sync/dapodik", require("./routes/sync"));
 app.use("/api/dashboard", require("./routes/dashboard"));
-app.use("/api/notifikasi", require("./routes/notifikasi"));
+app.use("/api/notifikasi", require("./routes/notifikasi").router);
 
 // ── 404 ──
 app.use((req, res) => {

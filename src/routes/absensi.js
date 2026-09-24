@@ -2,6 +2,7 @@ const router = require("express").Router();
 const prisma = require("../config/prisma");
 const { authMiddleware } = require("../middleware/auth");
 const { dapodikResponse, errorResponse } = require("../utils/response");
+const { kirimWA } = require("./notifikasi");
 
 const auth = authMiddleware();
 const guruAuth = authMiddleware(["Admin", "Guru"]);
@@ -66,9 +67,23 @@ router.post("/scan", guruAuth, async (req, res) => {
       nama_rombel: siswa.nama_rombel,
       tanggal: today.toISOString().split("T")[0],
       waktu_absen: absen.waktu_absen.toISOString(),
-      status: "Hadir",
-      metode: "scan",
     };
+
+    // Kirim WA ke ortu (async, gagal gapapa)
+    if (siswa.nomor_telepon_seluler) {
+      kirimWA(siswa.nomor_telepon_seluler,
+        `Assalamualaikum Wr. Wb.\n\nYth. Bpk/Ibu Wali dari ${siswa.nama}\n\n${siswa.nama} telah absen masuk pada:\nJam: ${absen.waktu_absen.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}\nStatus: Hadir\nTanggal: ${today.toISOString().split("T")[0]}\n\n-- SDN 2 Garumukti`
+      ).then(async (resWA) => {
+        await prisma.notifikasi_log.create({
+          data: {
+            absensi_id: absen.absensi_id,
+            nomor_tujuan: siswa.nomor_telepon_seluler,
+            pesan: `Absen: ${siswa.nama} - Hadir`,
+            status: resWA.status,
+          },
+        });
+      }).catch(() => {});
+    }
 
     res.json(dapodikResponse(hasil, { idField: "absensi_id", limit: 1 }));
   } catch (err) {
