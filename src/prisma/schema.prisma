@@ -57,26 +57,16 @@ model users {
   @@map("users")
 }
 
-model siswa {
+  model siswa {
   peserta_didik_id      String    @id @map("peserta_didik_id")
   sekolah_id            String
   nisn                  String    @unique
   nipd                  String?
   nama                  String
   jenis_kelamin         String
-  nik                   String?
-  tempat_lahir          String?
-  tanggal_lahir         DateTime?
-  agama_id_str          String?
-  alamat_jalan          String?
-  rt                    String?
-  rw                    String?
-  nama_ayah             String?
-  nama_ibu              String?
   nama_rombel           String?
   tingkat_pendidikan_id String?
   nomor_telepon_seluler String?
-  foto_url              String?
   is_active             Boolean   @default(true)
   sync_id               String?
   created_at            DateTime  @default(now())
