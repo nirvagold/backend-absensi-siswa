@@ -35,6 +35,7 @@ router.get("/", auth, async (req, res) => {
     const skip = (page - 1) * limit;
     const search = req.query.search || "";
     const kelas = req.query.kelas || req.user.nama_rombel || "";
+    const tingkat = req.query.tingkat || "";
 
     const where = { is_active: true };
     if (search) {
@@ -45,7 +46,7 @@ router.get("/", auth, async (req, res) => {
       ];
     }
     if (kelas) where.nama_rombel = kelas;
-    // Guru cuma liat kelasnya sendiri (bisa multi kelas)
+    if (tingkat) where.tingkat_pendidikan_id = tingkat;
     if (req.user.peran_id_str === "Guru" && req.user.nama_rombel) {
       const kelasGuru = req.user.nama_rombel.split(", ").filter(Boolean);
       where.nama_rombel = kelasGuru.length > 1 ? { in: kelasGuru } : kelasGuru[0];
