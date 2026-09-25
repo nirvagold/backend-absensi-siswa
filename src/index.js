@@ -28,6 +28,7 @@ app.use("/api/auth", require("./routes/auth"));
 app.use("/api/siswa", require("./routes/kartu")); // :id/kartu-qr, kartu-qr/bulk
 app.use("/api/siswa", require("./routes/siswa")); // /:id
 app.use("/api/absensi", require("./routes/absensi"));
+app.use("/api/kelas", require("./routes/kelas"));
 app.use("/api/sync/dapodik", require("./routes/sync"));
 app.use("/api/dashboard", require("./routes/dashboard"));
 app.use("/api/notifikasi", require("./routes/notifikasi").router);
