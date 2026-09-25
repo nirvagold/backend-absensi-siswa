@@ -9,22 +9,24 @@ const adminAuth = authMiddleware(["Admin"]);
 // Kirim WA via Fonnte
 async function kirimWA(nomor, pesan) {
   try {
-    const token = process.env.FONNTE_TOKEN;
-    if (!token) return { status: "gagal", error: "FONNTE_TOKEN belum diset" };
+    const token = process.env.WA_ACCESS_TOKEN;
+    const phoneId = process.env.WA_PHONE_NUMBER_ID;
+    if (!token || !phoneId) return { status: "gagal", error: "WA token/phone ID belum diset" };
 
-    const res = await axios.post("https://api.fonnte.com/send", {
-      target: nomor,
-      message: pesan,
-      countryCode: "62",
+    const res = await axios.post(`https://graph.facebook.com/v22.0/${phoneId}/messages`, {
+      messaging_product: "whatsapp",
+      to: nomor.replace(/^0/, "62").replace(/[^0-9]/g, ""),
+      type: "text",
+      text: { body: pesan },
     }, {
-      headers: { Authorization: token },
+      headers: { Authorization: `Bearer ${token}` },
       timeout: 10000,
     });
 
-    if (res.data?.status) {
-      return { status: "dikirim" };
+    if (res.data?.messages?.[0]?.id) {
+      return { status: "dikirim", wa_id: res.data.messages[0].id };
     }
-    return { status: "gagal", error: res.data?.reason || "Unknown" };
+    return { status: "gagal", error: JSON.stringify(res.data) };
   } catch (err) {
     return { status: "gagal", error: err.message };
   }
