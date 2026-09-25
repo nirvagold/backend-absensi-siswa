@@ -105,6 +105,12 @@ router.post("/manual", guruAuth, async (req, res) => {
       return res.status(400).json(errorResponse("Status tidak valid", "VALIDATION_ERROR"));
     }
 
+    // Validasi siswa ada
+    const siswaAda = await prisma.siswa.findUnique({ where: { peserta_didik_id } });
+    if (!siswaAda) {
+      return res.status(404).json(errorResponse("Siswa tidak ditemukan", "STUDENT_NOT_FOUND", 404));
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const besok = new Date(today);
