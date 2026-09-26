@@ -248,4 +248,28 @@ router.get("/siswa/:id", auth, async (req, res) => {
   }
 });
 
+// DELETE /api/absensi/:id — hapus riwayat absensi
+router.delete("/:id", auth, async (req, res) => {
+  try {
+    const absen = await prisma.absensi.findUnique({ where: { absensi_id: req.params.id } });
+    if (!absen) {
+      return res.status(404).json(errorResponse("Absensi tidak ditemukan", "NOT_FOUND", 404));
+    }
+
+    // Hanya admin yang bisa hapus
+    if (req.user.peran_id_str !== "Admin") {
+      return res.status(403).json(errorResponse("Hanya admin yang bisa menghapus absensi", "FORBIDDEN_ACCESS", 403));
+    }
+
+    // Hapus notifikasi log terkait dulu
+    await prisma.notifikasi_log.deleteMany({ where: { absensi_id: req.params.id } });
+    await prisma.absensi.delete({ where: { absensi_id: req.params.id } });
+
+    res.json({ success: true, message: "Absensi berhasil dihapus" });
+  } catch (err) {
+    console.error("Hapus absensi error:", err);
+    res.status(500).json(errorResponse("Gagal menghapus absensi", "INTERNAL_ERROR", 500));
+  }
+});
+
 module.exports = router;
