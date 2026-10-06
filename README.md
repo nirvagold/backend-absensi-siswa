@@ -24,9 +24,9 @@ npm start
 
 | Role | Username | Password | Kelas |
 | --- | --- | --- | --- |
-| Admin | `admin@sekolah.sch.id` | `admin123` | Semua |
-| Guru | `guru@sekolah.sch.id` | `guru123` | KELAS 3A |
-| Kepsek | `atepsuherman6747@gmail.com` | `dapodik123` | Read Only |
+| Admin | `admin@sekolah.sch.id` | `-` | Semua |
+| Guru | `guru@sekolah.sch.id` | `-` | KELAS 3A |
+| Kepsek | `atepsuherman6747@gmail.com` | `-` | Read Only |
 
 ---
 
