@@ -117,7 +117,7 @@ src/
    POST /api/sync/dapodik
    Body: {
      "ngrok_url": "https://xxxx.ngrok-free.dev",
-     "token": "0B5EHd1bAQzakEI",
+     "token": "-",
      "tipe": "all"
    }
    ```
