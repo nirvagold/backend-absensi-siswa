@@ -26,12 +26,6 @@ npm start
 | --- | --- | --- | --- |
 | Admin | `admin@sekolah.sch.id` | `admin123` | Semua |
 | Guru | `guru@sekolah.sch.id` | `guru123` | KELAS 3A |
-| Wali Kelas 1 | `idahsr@gmail.com` | `dapodik123` | 1A, 1B |
-| Wali Kelas 2 | `elisnina293@gmail.com` | `dapodik123` | 2A, 2B |
-| Wali Kelas 3 | `satap2pamulihan@gmail.com` | `dapodik123` | 3A, 3B |
-| Wali Kelas 4 | `rukmaredza@gmail.com` | `dapodik123` | 4A, 4B |
-| Wali Kelas 5 | `ratihsetiasih45@gmail.com` | `dapodik123` | 5A, 5B |
-| Wali Kelas 6 | `ayidadang1967@gmail.com` | `dapodik123` | 6A, 6B |
 | Kepsek | `atepsuherman6747@gmail.com` | `dapodik123` | Read Only |
 
 ---
