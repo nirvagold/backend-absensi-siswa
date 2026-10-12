@@ -35,9 +35,16 @@ router.get("/ringkasan", auth, async (req, res) => {
 
     const hadir = absensi.filter((a) => a.status === "Hadir").length;
     const terlambat = absensi.filter((a) => a.status === "Terlambat").length;
-    const izin = absensi.filter((a) => a.status === "Izin").length;
-    const sakit = absensi.filter((a) => a.status === "Sakit").length;
+    // Izin/Sakit: hitung dua bentuk -- status lama ("Izin"/"Sakit") DAN
+    // bentuk baru ("Tidak Hadir" + keterangan). Biar data lama & baru kebaca.
+    const izin =
+      absensi.filter((a) => a.status === "Izin").length +
+      absensi.filter((a) => a.status === "Tidak Hadir" && a.keterangan === "Izin").length;
+    const sakit =
+      absensi.filter((a) => a.status === "Sakit").length +
+      absensi.filter((a) => a.status === "Tidak Hadir" && a.keterangan === "Sakit").length;
     const tidak_hadir = absensi.filter((a) => a.status === "Tidak Hadir").length;
+    const alfa = absensi.filter((a) => a.status === "Tidak Hadir" && a.keterangan === "Alfa").length;
 
     const data = {
       tanggal: tanggalStrWIB(today),
@@ -47,6 +54,9 @@ router.get("/ringkasan", auth, async (req, res) => {
       izin,
       sakit,
       tidak_hadir,
+      alfa,
+      // alias: DashboardView baca `dashboard.alpha` (ejaan Inggris).
+      alpha: alfa,
       persentase_hadir: total_siswa > 0 ? +((hadir / total_siswa) * 100).toFixed(2) : 0,
     };
 

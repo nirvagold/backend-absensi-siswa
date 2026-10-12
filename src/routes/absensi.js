@@ -228,6 +228,7 @@ router.get("/hari-ini", auth, async (req, res) => {
       nama_rombel: a.siswa.nama_rombel,
       waktu_absen: a.waktu_absen.toISOString(),
       status: a.status,
+      keterangan: a.keterangan,
       metode: a.metode,
     }));
 
@@ -257,8 +258,25 @@ router.get("/", auth, async (req, res) => {
     }
     if (req.query.kelas) where.siswa = { nama_rombel: req.query.kelas };
     if (req.query.status) where.status = req.query.status;
+    // Filter keterangan (Izin/Sakit/Alfa) — dipakai buat misahin "Tidak Hadir"
+    if (req.query.keterangan) where.keterangan = req.query.keterangan;
+    // Search nama / NISN (gabung pakai AND biar ga nabrak filter siswa di atas)
+    const search = (req.query.search || "").trim();
+    if (search) {
+      where.AND = [
+        ...(where.AND || []),
+        {
+          siswa: {
+            OR: [
+              { nama: { contains: search, mode: "insensitive" } },
+              { nisn: { contains: search } },
+            ],
+          },
+        },
+      ];
+    }
 
-    const [total, absensi] = await Promise.all([
+    const [total, absensi, perStatus, perKeterangan] = await Promise.all([
       prisma.absensi.count({ where }),
       prisma.absensi.findMany({
         where,
@@ -266,6 +284,12 @@ router.get("/", auth, async (req, res) => {
         take: limit,
         include: { siswa: { select: { nama: true, nisn: true, nama_rombel: true } } },
         orderBy: { tanggal: "desc" },
+      }),
+      prisma.absensi.groupBy({ by: ["status"], where, _count: { _all: true } }),
+      prisma.absensi.groupBy({
+        by: ["keterangan"],
+        where: { ...where, status: "Tidak Hadir" },
+        _count: { _all: true },
       }),
     ]);
 
@@ -278,12 +302,29 @@ router.get("/", auth, async (req, res) => {
       tanggal: tanggalStrWIB(a.tanggal),
       waktu_absen: a.waktu_absen.toISOString(),
       status: a.status,
+      keterangan: a.keterangan,
       metode: a.metode,
     }));
+
+    // Ringkasan dihitung dari SELURUH hasil filter (bukan cuma 1 halaman),
+    // biar angkanya konsisten walau data lebih dari `limit`.
+    const hitung = (s) => perStatus.find((p) => p.status === s)?._count._all || 0;
+    const ket = (k) => perKeterangan.find((p) => p.keterangan === k)?._count._all || 0;
+
+    const ringkasan = {
+      total_siswa: total,
+      hadir: hitung("Hadir"),
+      terlambat: hitung("Terlambat"),
+      izin: hitung("Izin") + ket("Izin"),
+      sakit: hitung("Sakit") + ket("Sakit"),
+      tidak_hadir: hitung("Tidak Hadir"),
+      alfa: ket("Alfa"),
+    };
 
     res.json({
       ...dapodikResponse(rows, { idField: "absensi_id", limit }),
       results: total,
+      ringkasan,
       pagination: { page, limit, total, total_pages: Math.ceil(total / limit) },
     });
   } catch (err) {

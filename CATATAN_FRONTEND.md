@@ -3,7 +3,8 @@
 Dokumen ini buat tim frontend. Isinya: **apa yang berubah di backend**, **endpoint barunya**,
 dan **apa yang perlu disesuaikan di frontend** biar dua-duanya klop.
 
-Terakhir diperbarui: 2026-10-13 (setelah commit `c99f705` + `9dad209`).
+Terakhir diperbarui: 2026-10-13 (setelah commit `c99f705` + `9dad209`, ditambah
+field baru backend: `keterangan`, `metode`, `ringkasan`, `alfa`/`alpha`, filter `keterangan` & `search`).
 
 Base URL tetap sama: `https://backend-absensi-siswa-mu.vercel.app`
 
@@ -15,12 +16,13 @@ Base URL tetap sama: `https://backend-absensi-siswa-mu.vercel.app`
 |---|-----------|-------------------|
 | 1 | **Scan di luar jam sekolah ditolak** (400) | 🔴 **Wajib** — ScannerView harus nangkep error code baru |
 | 2 | **Status scan otomatis** Hadir/Terlambat dari jam | 🟢 Aman — ScannerView udah baca `rows.status` |
-| 3 | **Alfa otomatis** jam 09:00 WIB | 🟡 Perlu — dashboard punya 6 kartu, backend cuma kirim 5 field |
+| 3 | **Alfa otomatis** jam 09:00 WIB | ✅ **Beres** — dashboard `alfa`/`alpha` udah dikirim |
 | 4 | **"Tidak Hadir" wajib keterangan** Izin/Sakit/Alfa | 🔴 **Wajib** — ManualAbsensiView sekarang bakal ditolak 400 |
 | 5 | **Edit absensi** `PUT /api/absensi/:id` | 🟢 Endpoint baru, belum ada UI-nya |
 | 6 | **WA otomatis/manual** | 🟢 Endpoint baru, belum ada UI-nya |
 | 7 | **Zona waktu WIB** di semua hari/jam | 🟡 Perlu — format jam di frontend belum set timezone |
-| 8 | **`GET /api/absensi` nambah `keterangan`?** | ⚠️ **Belum** — lihat bagian 4.1, ini yang paling bikin bingung |
+| 8 | **`GET /api/absensi` nambah `keterangan`, `metode`, `ringkasan`** | ✅ **Beres** — tinggal dipakai di UI |
+| 9 | **Filter baru** `keterangan` + `search` | ✅ **Beres** — search Riwayat yang dulu gak jalan, sekarang jalan |
 
 ---
 
@@ -94,10 +96,10 @@ Efek di frontend:
 - **Dashboard** `tidak_hadir` bakal naik drastis setelah jam 9 (semua yang belum scan masuk situ)
 - **Riwayat** bakal muncul baris status `Tidak Hadir`, metode `sistem`
 
-⚠️ **DashboardView baca `dashboard.alpha`** ([DashboardView.vue:264](../../frontend/src/views/DashboardView.vue#L264)),
-tapi `GET /api/dashboard/ringkasan` **tidak pernah mengirim field `alpha`**. Karena ada `?? 0`,
-kartu itu **selalu nampilin 0** — kemungkinan besar ini bukan bug baru, tapi sekarang makin
-kelihatan karena alfa jadi nyata. Lihat bagian 4.2.
+⚠️ **DashboardView baca `dashboard.alpha`** ([DashboardView.vue:264](../../frontend/src/views/DashboardView.vue#L264)).
+Sebelumnya `GET /api/dashboard/ringkasan` **tidak pernah mengirim field `alpha`**, jadi kartu itu
+**selalu nampilin 0**. **Udah dibetulin di backend** — sekarang kirim `alfa` **dan** `alpha`
+(alias). Lihat bagian 4.3.
 
 ### 2.4 "Tidak Hadir" wajib keterangan Izin/Sakit/Alfa
 
@@ -139,7 +141,7 @@ Ini yang **paling mungkin bikin frontend error** sekarang.
 
 | Endpoint | Fungsi | Saran UI |
 |---|---|---|
-| `PUT /api/absensi/:absensi_id` | Ubah status/keterangan | Tombol "Edit" di tabel Riwayat (lihat 4.3) |
+| `PUT /api/absensi/:absensi_id` | Ubah status/keterangan | Tombol "Edit" di tabel Riwayat (lihat 4.5) |
 | `POST /api/notifikasi/kirim/:absensi_id` | Kirim WA manual | Tombol "Kirim WA" di Riwayat |
 | `GET /api/notifikasi/setting` | Baca setting WA | Bisa buat nampilin status aktif/nonaktif |
 | `GET /api/notifikasi/log` | 50 log WA terakhir | Halaman opsional |
@@ -212,34 +214,27 @@ Catatan untuk test: di DB produksi **belum ada** akun Kepala Sekolah
 
 ### 🟡 P1 — biar informasi gak ilang
 
-5. **RiwayatView**: tampilkan kolom `keterangan` (sekarang cuma nampilin `status`, jadi
-   "Tidak Hadir" Izin / Sakit / Alfa kelihatan sama semua)
-6. **RiwayatView**: filter status pakai nilai baru (`Tidak Hadir` + keterangan), bukan
-   `Izin`/`Sakit` sebagai status
-7. **DashboardView**: kartu "Alpha" selalu 0 karena field `alpha` gak ada di response
+5. **RiwayatView**: tampilkan `row.keterangan` di kolom Status — backend udah kirim
+   ✅ (lihat 4.1), tinggal dipakai di UI
+6. **RiwayatView**: ikon metode ngecek `row.metode === 'QR'`, padahal nilainya
+   `scan`/`manual`/`sistem` — jadi ikon QR gak pernah muncul
+
+> **DashboardView gak perlu diubah.** Kartu "Alpha" dulu selalu 0 karena field `alpha`
+> gak ada di response — itu udah dibetulin dari backend ✅ (lihat 4.3). `?? 0` di
+> [baris 264](../../frontend/src/views/DashboardView.vue#L264) boleh dibiarin.
 
 ### 🟢 P2 — fitur baru
 
-8. Tombol Edit di Riwayat (`PUT /api/absensi/:id`)
-9. Tombol "Kirim WA" di Riwayat (`POST /api/notifikasi/kirim/:absensi_id`)
+7. Tombol Edit di Riwayat (`PUT /api/absensi/:id`) — lihat 4.5
+8. Tombol "Kirim WA" di Riwayat (`POST /api/notifikasi/kirim/:absensi_id`)
 
 ---
 
-## 4. Hal yang perlu diputuskan bareng
+## 4. Yang sudah dikerjakan backend
 
-### 4.1 `GET /api/absensi` belum mengirim `keterangan`
+### 4.1 ✅ `GET /api/absensi` sekarang kirim `keterangan` + `metode`
 
-Ini yang perlu dibahas. **RiwayatView manggil `GET /api/absensi`** dan baca
-`response.data.rows`, lalu menampilkan `row.status`
-([baris 848](../../frontend/src/views/RiwayatView.vue#L848)) — **tidak membaca
-`keterangan`**, dan backend juga **belum mengirimnya**.
-
-Jadi baris Izin, Sakit, dan Alfa semuanya muncul dengan label yang sama: **"Tidak Hadir"**.
-Guru gak bisa bedain siapa yang izin dan siapa yang alfa di halaman riwayat.
-
-**Usul saya:** tambahkan `keterangan` + `metode` ke response `GET /api/absensi`
-(field `metode` sebenernya dibaca frontend di [baris 858](../../frontend/src/views/RiwayatView.vue#L858)
-tapi juga belum ada di response).
+Row `GET /api/absensi` dan `GET /api/absensi/hari-ini` sekarang punya 2 field tambahan:
 
 ```json
 {
@@ -251,39 +246,97 @@ tapi juga belum ada di response).
   "tanggal": "2026-10-13",
   "waktu_absen": "2026-10-13T00:12:30.000Z",
   "status": "Tidak Hadir",
-  "keterangan": "Alfa",      // <-- BARU
-  "metode": "sistem"         // <-- BARU (frontend udah nunggu ini)
+  "keterangan": "Alfa",
+  "metode": "sistem"
 }
 ```
 
-**Mau saya kerjakan dari sisi backend?** Satu baris di `src/routes/absensi.js` (2 tempat:
-`GET /` dan `GET /hari-ini`).
+`keterangan` isinya `Izin`/`Sakit`/`Alfa` kalau statusnya `Tidak Hadir`, selain itu `null`.
+`metode` isinya `scan` / `manual` / `sistem`.
 
-### 4.2 `GET /api/absensi` — frontend baca `response.data.ringkasan`, backend gak kirim
+**Yang perlu di frontend:** RiwayatView sekarang bisa nampilin keterangan biar Izin, Sakit,
+dan Alfa gak kelihatan sama. Ikon "QR" di kolom metode
+([baris 858](../../frontend/src/views/RiwayatView.vue#L858) ngecek `row.metode === 'QR'`)
+masih gak match — nilainya sekarang `scan`/`manual`/`sistem`, bukan `QR`.
 
-[RiwayatView.vue:1110](../../frontend/src/views/RiwayatView.vue#L1110) baca
-`response.data.ringkasan` buat 5 kartu ringkasan di atas tabel. Saya cek response asli
-dari backend, key-nya cuma:
+Saran tampilan kolom Status:
 
+```js
+// ganti {{ row.status }} jadi:
+row.status === 'Tidak Hadir' && row.keterangan
+  ? `Tidak Hadir — ${row.keterangan}`
+  : row.status
 ```
-results, id, start, limit, rows, pagination
+
+### 4.2 ✅ `GET /api/absensi` sekarang kirim `ringkasan`
+
+5 kartu ringkasan di RiwayatView sekarang bisa render. Response nambah key `ringkasan`
+dihitung dari **seluruh hasil filter**, bukan cuma 1 halaman:
+
+```json
+"ringkasan": {
+  "total_siswa": 150,
+  "hadir": 120,
+  "terlambat": 14,
+  "izin": 8,
+  "sakit": 5,
+  "tidak_hadir": 16,
+  "alfa": 11
+}
 ```
 
-(`ringkasan` gak ada.)
+Nama field-nya **persis** yang dibaca [RiwayatView.vue](../../frontend/src/views/RiwayatView.vue):
+`total_siswa`, `hadir`, `terlambat`, `izin`, `sakit`, `tidak_hadir`. Tambahan `alfa` buat kalau
+mau bikin kartu terpisah.
 
-Karena ada `v-if="summary"` ([baris 379](../../frontend/src/views/RiwayatView.vue#L379)),
-blok ringkasan itu **gak pernah dirender sama sekali** — gak error, cuma kosong.
+Kartu "Izin / Sakit" di [baris 518](../../frontend/src/views/RiwayatView.vue#L518) jumblahin
+`summary.izin + summary.sakit` client-side — itu tetap jalan, gak perlu diubah.
 
-**Dua pilihan:**
+Label "Tanpa keterangan" di kartu Tidak Hadir
+([baris 562](../../frontend/src/views/RiwayatView.vue#L562)) **sudah gak akurat** — sekarang
+"Tidak Hadir" hampir selalu punya keterangan (Izin/Sakit/Alfa) dan itulah isi kartunya.
 
-- **(a) Backend nyediain** — tambah `ringkasan` ke response `GET /api/absensi`, isinya hitungan
-  per status sesuai filter yang aktif. Lebih enak, karena angka & tabel dijamin konsisten
-- **(b) Frontend hitung sendiri** — dari `rows` yang ada. Masalahnya `rows` cuma 1 halaman,
-  jadi angkanya salah kalau data lebih dari 50 baris
+### 4.3 ✅ Dashboard sekarang kirim `alfa` + `alpha`
 
-Saya saranin **(a)**. Mau dikerjakan?
+`GET /api/dashboard/ringkasan` nambah 2 field (isinya sama, alias dobel):
 
-### 4.3 Edit absensi: UI-nya gimana?
+```json
+"alfa": 7, "alpha": 7
+```
+
+Jadi kartu "Alpha" di [DashboardView.vue:264](../../frontend/src/views/DashboardView.vue#L264)
+sekarang nampilin angka beneran, bukan 0 terus.
+
+Sekalian: `izin` dan `sakit` di dashboard sekarang ngegabungin status lama (`Izin`/`Sakit`)
+**dan** bentuk baru (`Tidak Hadir` + keterangan), biar data lama tetap kehitung.
+
+### 4.4 ✅ `GET /api/absensi` nambah filter `keterangan` & `search`
+
+Dua query param baru:
+
+| Param | Fungsi |
+|---|---|
+| `keterangan` | `Izin` / `Sakit` / `Alfa` — buat misahin yang berstatus "Tidak Hadir" |
+| `search` | Cari **nama** atau **NISN**, case-insensitive, bisa sebagian |
+
+```javascript
+// cuma yang alfa
+api.get('/api/absensi?status=Tidak%20Hadir&keterangan=Alfa')
+
+// cari nama
+api.get('/api/absensi?search=annasya')
+```
+
+> **Catatan penting:** RiwayatView sekarang udah ngeg-*kirim* `params.search`
+> ([baris 1101–1103](../../frontend/src/views/RiwayatView.vue#L1101)) — minimal 3 huruf —
+> tapi backend **dulu diam-diam ngabaikan** param itu, jadi search-nya gak ngefek sementara
+> user ngira udah jalan. Sekarang udah beneran nyari. Coba tes: ketik nama siswa di kotak
+> search Riwayat, hasilnya harus nyempit.
+
+Filter `search` bisa digabung sama `kelas`/`status`/tanggal — semuanya dipakai bareng,
+bukan saling nimpa.
+
+### 4.5 Edit absensi: masih nunggu keputusan
 
 Backend udah punya `PUT /api/absensi/:id` (Admin & Guru). Kasus utamanya: **alfa otomatis
 diubah jadi izin** setelah siswa bawa surat.
@@ -297,7 +350,7 @@ Format body & response ada di [API_DOCUMENTATION.md](API_DOCUMENTATION.md) bagia
 
 Backend cuma nerima `status` + `keterangan`; `waktu_absen` & `metode` gak bisa diubah.
 
-### 4.4 Rencana WA otomatis
+### 4.6 Rencana WA otomatis
 
 | Status | WA otomatis | WA manual |
 |---|---|---|
@@ -326,13 +379,37 @@ Sebelum nganggep dua sisi udah klop, cek ini:
 - [ ] **Manual `Tidak Hadir` + keterangan `Alfa`** → berhasil
 - [ ] **Jam di Riwayat** = jam WIB yang sama dengan jam scan beneran
 - [ ] **Hapus absensi** (Admin) → berhasil, baris hilang
+- [ ] **Riwayat nampilin keterangan** → baris Izin / Sakit / Alfa bisa dibedain
+- [ ] **Kartu ringkasan Riwayat** muncul (dulu gak pernah render)
+- [ ] **Kotak search Riwayat** beneran nyempit hasilnya
+- [ ] **Kartu "Alpha" di Dashboard** nampilin angka, bukan 0
+- [ ] **Filter `keterangan=Alfa`** → cuma nampilin yang alfa
 
 ---
 
-## 6. Ringkasan Aksi
+## 6. Yang Sudah Dites di Backend
+
+Dites langsung ke DB produksi (data uji dibikin, terus dihapus lagi):
+
+| Yang dites | Hasil |
+|---|---|
+| `GET /api/absensi` punya key `ringkasan` + row `keterangan`/`metode` | ✅ |
+| Ringkasan kehitung bener: 4 data uji (1 alfa, 1 izin baru, 1 sakit baru, 1 izin lama) → izin=2, sakit=1, alfa=1, tidak_hadir=3 | ✅ |
+| Filter `keterangan=Alfa` → cuma baris alfa | ✅ |
+| `search` + `kelas` digabung → gak saling nimpa | ✅ |
+| `GET /api/absensi/hari-ini` punya `keterangan`/`metode` | ✅ |
+| Dashboard: 1 alfa + 1 izin → `alfa:1`, `alpha:1`, `izin` naik | ✅ |
+| Scan di luar jam (jam 23:50 WIB) → 400 `OUTSIDE_ABSEN_HOURS` | ✅ |
+| Scan menimpa alfa otomatis → jadi `Terlambat`, `diubah_dari_alfa: true` | ✅ |
+| 409 tetap muncul kalau catatannya manual/scan | ✅ |
+| DB balik ke kondisi awal (15 baris absensi, 4 log) | ✅ |
+
+---
+
+## 7. Ringkasan Aksi
 
 | Siapa | Ngapain |
 |---|---|
-| **Frontend** | Fix 4 hal P0 (error code, opsi status manual, keterangan, timezone) |
-| **Backend** | Kalau disetujui: kirim `keterangan` + `metode` di `GET /api/absensi`, dan `ringkasan` |
+| **Frontend** | Fix 4 hal P0 (error code, opsi status manual, keterangan, timezone) + pakai field baru (`keterangan`, `ringkasan`, `alfa`) |
+| **Backend** | ✅ Selesai: kirim `keterangan` + `metode`, `ringkasan`, `alfa`/`alpha`, filter `keterangan` & `search` |
 | **Operator (kamu)** | Set `CRON_SECRET` + `FONNTE_TOKEN` di Vercel biar alfa & WA beneran jalan |

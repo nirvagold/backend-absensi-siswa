@@ -892,13 +892,18 @@ GET /api/absensi/hari-ini
       "nisn": "3173959741",
       "nama": "ANNASYA AZRA IZZATUNNISA",
       "nama_rombel": "KELAS 3A",
-      "waktu_absen": "2026-09-24T07:12:30.000Z",
-      "status": "Hadir",
-      "metode": "scan"
+      "waktu_absen": "2026-09-24T00:12:30.000Z",
+      "status": "Tidak Hadir",
+      "keterangan": "Alfa",
+      "metode": "sistem"
     }
   ]
 }
 ```
+
+**Catatan:** mulai jam masuk, daftar ini bakal nambah baris alfa otomatis
+(`status: "Tidak Hadir"`, `keterangan: "Alfa"`, `metode: "sistem"`) buat siswa yang belum scan.
+Guru cuma lihat absensi kelasnya sendiri.
 
 **Buat polling real-time:** Panggil endpoint ini tiap 5-10 detik selama sesi absen berlangsung.
 
@@ -918,10 +923,12 @@ GET /api/absensi
 |-----------|------|---------|------------|
 | `page` | int | 1 | Pagination |
 | `limit` | int | 50 | Max 200 |
-| `tanggal_mulai` | date | - | Format: YYYY-MM-DD |
-| `tanggal_selesai` | date | - | Format: YYYY-MM-DD |
+| `tanggal_mulai` | date | - | Format: YYYY-MM-DD (WIB) |
+| `tanggal_selesai` | date | - | Format: YYYY-MM-DD (WIB), **inklusif** |
 | `kelas` | string | - | Filter nama rombel |
 | `status` | string | - | Hadir / Terlambat / Izin / Sakit / Tidak Hadir |
+| `keterangan` | string | - | Izin / Sakit / Alfa — buat misahin "Tidak Hadir" |
+| `search` | string | - | Cari nama atau NISN (case-insensitive, bisa sebagian) |
 
 **Contoh:**
 
@@ -932,9 +939,17 @@ api.get('/api/absensi?tanggal_mulai=2026-09-18&tanggal_selesai=2026-09-24');
 // Filter kelas tertentu
 api.get('/api/absensi?kelas=KELAS%203A&status=Hadir');
 
+// Cuma yang alfa (Tidak Hadir + keterangan Alfa)
+api.get('/api/absensi?status=Tidak%20Hadir&keterangan=Alfa');
+
+// Cari nama / NISN
+api.get('/api/absensi?search=annasya');
+
 // Pagination
 api.get('/api/absensi?page=2&limit=20');
 ```
+
+`search` bisa digabung sama filter lain (dipakai bareng, bukan saling nimpa).
 
 **Response 200:**
 
@@ -951,12 +966,22 @@ api.get('/api/absensi?page=2&limit=20');
       "nisn": "3173959741",
       "nama": "ANNASYA AZRA IZZATUNNISA",
       "nama_rombel": "KELAS 3A",
-      "tanggal": "2024-09-24",
-      "waktu_absen": "2026-09-24T07:12:30.000Z",
-      "status": "Hadir",
-      "metode": "scan"
+      "tanggal": "2026-09-24",
+      "waktu_absen": "2026-09-24T00:12:30.000Z",
+      "status": "Tidak Hadir",
+      "keterangan": "Alfa",
+      "metode": "sistem"
     }
   ],
+  "ringkasan": {
+    "total_siswa": 150,
+    "hadir": 120,
+    "terlambat": 14,
+    "izin": 8,
+    "sakit": 5,
+    "tidak_hadir": 16,
+    "alfa": 11
+  },
   "pagination": {
     "page": 1,
     "limit": 50,
@@ -965,6 +990,16 @@ api.get('/api/absensi?page=2&limit=20');
   }
 }
 ```
+
+**Catatan field:**
+
+- `keterangan` — isinya `Izin`/`Sakit`/`Alfa` kalau statusnya `Tidak Hadir`, selain itu `null`.
+  Dipakai buat misahin Izin, Sakit, dan Alfa yang semuanya berstatus "Tidak Hadir"
+- `metode` — `scan` / `manual` / `sistem` (alfa otomatis)
+- `ringkasan` — dihitung dari **seluruh hasil filter**, bukan cuma 1 halaman. Jadi angkanya
+  tetap bener walau `limit` kecil. `hadir` & `terlambat` dari status; `izin`/`sakit` ngegabungin
+  status lama (`Izin`/`Sakit`) **dan** bentuk baru (`Tidak Hadir` + keterangan); `tidak_hadir`
+  ngitung semua yang berstatus "Tidak Hadir"; `alfa` khusus keterangan Alfa
 
 ### 4.5 Riwayat Per Siswa
 
@@ -1120,14 +1155,16 @@ GET /api/dashboard/ringkasan
   "start": 0,
   "limit": 1,
   "rows": {
-    "tanggal": "2026-09-24",
+    "tanggal": "2026-10-13",
     "total_siswa": 301,
     "hadir": 280,
     "terlambat": 5,
     "izin": 3,
     "sakit": 2,
     "tidak_hadir": 12,
-    "persentase_hadir": 92.72
+    "alfa": 7,
+    "alpha": 7,
+    "persentase_hadir": 93.02
   }
 }
 ```
@@ -1136,12 +1173,22 @@ GET /api/dashboard/ringkasan
 
 ```
 Total Siswa:  301
-Hadir:        280  (92.72%)
+Hadir:        280  (93.02%)
 Terlambat:    5
+Tidak Hadir:  12   <- termasuk yang alfa
 Izin:         3
 Sakit:        2
-Tidak Hadir:  12
+Alfa:         7
 ```
+
+**Catatan field:**
+
+- `alfa` **dan** `alpha` sama isinya — alias dobel, biar frontend yang udah nulis
+  `dashboard.alpha` tetap jalan. Keduanya = jumlah `Tidak Hadir` dengan keterangan `Alfa`
+- `izin`/`sakit` ngegabungin status lama (`Izin`/`Sakit`) **dan** bentuk baru
+  (`Tidak Hadir` + keterangan `Izin`/`Sakit`), jadi data lama tetap kehitung
+- `tidak_hadir` ngitung **semua** yang berstatus "Tidak Hadir" (izin + sakit + alfa)
+- Guru cuma lihat angka kelasnya sendiri
 
 ### 5.2 Tren Kehadiran (7 Hari)
 
