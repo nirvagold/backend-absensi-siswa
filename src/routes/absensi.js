@@ -2,7 +2,7 @@ const router = require("express").Router();
 const prisma = require("../config/prisma");
 const { authMiddleware } = require("../middleware/auth");
 const { dapodikResponse, errorResponse } = require("../utils/response");
-const { statusDariJam } = require("../config/absensi");
+const { statusDariJam, cekJamOperasional, jamBuka, jamTutup } = require("../config/absensi");
 const { rentangHariWIB, jamStrWIB, tanggalStrWIB, dariTanggalStr } = require("../utils/waktu");
 const { kirimWA, buatPesanAbsen, catatLog, waOtomatis } = require("./notifikasi");
 
@@ -26,8 +26,21 @@ router.post("/scan", guruAuth, async (req, res) => {
       return res.status(404).json(errorResponse("QR Code tidak dikenali. Siswa tidak ditemukan", "STUDENT_NOT_FOUND", 404));
     }
 
+    // POINT #5: absen di luar jam sekolah tidak valid -> tolak.
+    // Batasnya diatur ABSEN_JAM_MULAI / ABSEN_JAM_SELESAI (default 06:00 - 12:00 WIB).
+    const wallTime = new Date(); // waktu scan sebenarnya
+    const jamOp = cekJamOperasional(wallTime);
+    if (!jamOp.valid) {
+      return res.status(400).json({
+        success: false,
+        message: `Absen ditolak: ${jamOp.alasan}. Jam absen dibuka ${jamBuka()} - ${jamTutup()} WIB`,
+        error_code: "OUTSIDE_ABSEN_HOURS",
+        data: { waktu_scan: wallTime.toISOString(), jam_wib: jamStrWIB(wallTime) },
+      });
+    }
+
     // Cek udah absen belum hari ini (pakai batas hari WIB, bukan jam server)
-    const { awal: today, akhir: besok } = rentangHariWIB(new Date());
+    const { awal: today, akhir: besok } = rentangHariWIB(wallTime);
 
     const existing = await prisma.absensi.findFirst({
       where: {
@@ -36,7 +49,13 @@ router.post("/scan", guruAuth, async (req, res) => {
       },
     });
 
-    if (existing) {
+    // Alfa otomatis (metode "sistem" + keterangan "Alfa") BUKAN catatan manual --
+    // kalau siswa ternyata datang dan scan, catatan itu ditimpa jadi "Terlambat".
+    // Catatan hasil scan / input manual tetap tidak bisa ditimpa (poin di bawah).
+    const alfaOtomatis =
+      existing && existing.metode === "sistem" && existing.keterangan === "Alfa";
+
+    if (existing && !alfaOtomatis) {
       return res.status(409).json({
         success: false,
         message: `Siswa sudah absen hari ini pukul ${jamStrWIB(existing.waktu_absen)} WIB`,
@@ -47,21 +66,32 @@ router.post("/scan", guruAuth, async (req, res) => {
 
     // Catat absensi. Status dihitung dari waktu scan vs batas jam (POINT #3).
     // Scan selalu berarti siswa hadir, paling jauh dianggap "Terlambat".
-    const wallTime = new Date(); // waktu scan sebenarnya
     const statusScan = statusDariJam(wallTime) || "Hadir";
 
-    const absen = await prisma.absensi.create({
-      data: {
-        peserta_didik_id: siswa.peserta_didik_id,
-        sekolah_id: siswa.sekolah_id,
-        tanggal: today,
-        waktu_absen: wallTime,
-        status: statusScan,
-        metode: "scan",
-        sesi_id: sesi_id || null,
-        petugas_id: req.user.pengguna_id,
-      },
-    });
+    const absen = alfaOtomatis
+      ? await prisma.absensi.update({
+          where: { absensi_id: existing.absensi_id },
+          data: {
+            waktu_absen: wallTime,
+            status: statusScan,
+            metode: "scan",
+            keterangan: null, // buang keterangan "Alfa"
+            sesi_id: sesi_id || null,
+            petugas_id: req.user.pengguna_id,
+          },
+        })
+      : await prisma.absensi.create({
+          data: {
+            peserta_didik_id: siswa.peserta_didik_id,
+            sekolah_id: siswa.sekolah_id,
+            tanggal: today,
+            waktu_absen: wallTime,
+            status: statusScan,
+            metode: "scan",
+            sesi_id: sesi_id || null,
+            petugas_id: req.user.pengguna_id,
+          },
+        });
 
     const hasil = {
       absensi_id: absen.absensi_id,
@@ -73,6 +103,7 @@ router.post("/scan", guruAuth, async (req, res) => {
       waktu_absen: absen.waktu_absen.toISOString(),
       status: absen.status,
     };
+    if (alfaOtomatis) hasil.diubah_dari_alfa = true;
 
     // Kirim WA otomatis hanya jika setting menyalakan (POINT #1),
     // dan hanya untuk status kehadiran yang butuh info ortu (Hadir/Terlambat).

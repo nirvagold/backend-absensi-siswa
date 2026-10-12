@@ -43,9 +43,11 @@ npm start
 - Guru wali multi kelas (1 guru bisa pegang >1 kelas)
 - Generate kartu PDF + QR (single & bulk)
 - Scan QR absen (peserta_didik_id) + cegah double absen
+- Scan di luar jam sekolah ditolak (`ABSEN_JAM_MULAI`-`ABSEN_JAM_SELESAI`, default 06:00-12:00 WIB)
 - Status scan otomatis: lewat batas jam masuk -> "Terlambat" (batas diatur via env)
 - Absen manual (Hadir/Terlambat/Izin/Sakit/Tidak Hadir) + keterangan Izin/Sakit/Alfa
 - Alfa otomatis: siswa belum absen setelah jam masuk -> "Tidak Hadir" + keterangan "Alfa" (Vercel Cron / scheduler in-proses)
+- Siswa telat datang: scan menimpa catatan alfa otomatis jadi "Terlambat"
 - Edit absensi (ubah status/keterangan) -- mis. alfa diubah jadi izin
 - Riwayat absensi (filter tanggal, kelas, status)
 - Riwayat per siswa
@@ -102,7 +104,7 @@ src/
     notifikasi.js       kirim wa (fonnte) + log
     cron.js             cron alfa otomatis (dipicu Vercel Cron)
   config/
-    absensi.js          aturan batas jam (Hadir/Terlambat)
+    absensi.js          aturan jam: jam operasional + batas Hadir/Terlambat
   scripts/
     alfa.js             tandai alfa otomatis (siswa belum absen)
   utils/
@@ -152,8 +154,22 @@ Lihat `.env.example` untuk daftar lengkap. Yang penting untuk fitur absensi & WA
 | `FONNTE_TOKEN` | Token Fonnte buat kirim WA. Kalau kosong, WA tidak terkirim (balas `gagal`). | (kosong) |
 | `WA_KIRIM_OTOMATIS` | `"true"` = kirim WA otomatis setelah absen Hadir/Terlambat. `"false"` = admin kirim manual. | `"true"` |
 | `ABSEN_BATAS_MASUK` | Batas jam masuk WIB (`"HH:MM"`). Scan lewat jam ini -> status "Terlambat". Juga jadi jam jalan cron alfa. | `"09:00"` |
+| `ABSEN_JAM_MULAI` / `ABSEN_JAM_SELESAI` | Jam operasional absen WIB. Scan di luar rentang ini ditolak (`OUTSIDE_ABSEN_HOURS`). | `"06:00"` / `"12:00"` |
 | `CRON_SECRET` | Secret buat endpoint `/api/cron/alfa`. **Wajib diset** di Vercel. | (kosong) |
 | `JADWAL_JOBS` | `"false"` = matikan scheduler alfa in-proses (dipakai di Vercel, karena ada Vercel Cron). | (aktif) |
+
+### Jam absen & status
+
+Dua pengaturan jam yang beda fungsinya:
+
+- **`ABSEN_JAM_MULAI` - `ABSEN_JAM_SELESAI`** (jam operasional): di luar rentang ini scan
+  **ditolak** dengan `400 OUTSIDE_ABSEN_HOURS`, absen tidak dicatat. Default 06:00-12:00 WIB.
+- **`ABSEN_BATAS_MASUK`** (batas keterlambatan): di dalam jam operasional, scan sebelum jam ini
+  -> "Hadir", setelahnya -> "Terlambat".
+
+Siswa yang datang setelah ditandai alfa otomatis lalu scan sendiri: catatan alfa
+(metode `sistem`) ditimpa jadi "Terlambat" + WA otomatis terkirim. Catatan hasil scan
+atau input manual tetap tidak bisa ditimpa (balas `409 ALREADY_ABSENT`).
 
 ### Alfa otomatis
 

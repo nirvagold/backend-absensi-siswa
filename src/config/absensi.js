@@ -26,6 +26,44 @@ function getBatasSesi() {
   return parseJam(process.env.ABSEN_BATAS_SESI);
 }
 
+// ── Jam operasional absen (POINT #5) ──
+// Scan/absen di luar jam sekolah dianggap TIDAK VALID.
+// Batasnya bisa lewat env:
+//   ABSEN_JAM_MULAI (default "06:00") -- absen sebelum jam ini ditolak
+//   ABSEN_JAM_SELESAI (default "12:00") -- absen setelah jam ini ditolak
+// Set ABSEN_JAM_MULAI="00:00" & ABSEN_JAM_SELESAI="23:59" buat mematikan fitur ini.
+// Return { valid: bool, alasan: string|null }.
+function cekJamOperasional(date) {
+  // Pakai || bukan ?? : env kosong ("") harus jatuh ke default, bukan mematikan cek.
+  const mulai = parseJam(process.env.ABSEN_JAM_MULAI || "06:00");
+  const selesai = parseJam(process.env.ABSEN_JAM_SELESAI || "12:00");
+  const menit = menitDariTanggal(date);
+
+  if (mulai !== null && menit < mulai) {
+    return { valid: false, alasan: "sebelum jam absen dibuka" };
+  }
+  if (selesai !== null && menit > selesai) {
+    return { valid: false, alasan: "sudah lewat jam absen" };
+  }
+  return { valid: true, alasan: null };
+}
+
+// String "HH:MM" jam buka/tutup absen (buat pesan error). Fallback ke default
+// kalau env kosong/invalid, biar pesan tetap informatif.
+function menitKeJam(menit) {
+  const j = Math.floor(menit / 60);
+  const m = menit % 60;
+  return String(j).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+}
+
+function jamBuka() {
+  return menitKeJam(parseJam(process.env.ABSEN_JAM_MULAI || "06:00") ?? 6 * 60);
+}
+
+function jamTutup() {
+  return menitKeJam(parseJam(process.env.ABSEN_JAM_SELESAI || "12:00") ?? 12 * 60);
+}
+
 // Ubah jam Date jadi menit sejak 00:00 WIB.
 function menitDariTanggal(t) {
   return menitWIB(t);
@@ -60,6 +98,9 @@ module.exports = {
   parseJam,
   getBatasMasuk,
   getBatasSesi,
+  cekJamOperasional,
+  jamBuka,
+  jamTutup,
   menitDariTanggal,
   statusDariJam,
 };

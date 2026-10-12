@@ -630,14 +630,24 @@ POST /api/absensi/scan
 3. Kamera scan QR -> dapet peserta_didik_id (UUID)
 4. Frontend kirim POST kode itu ke backend
 5. Backend cari siswa (1 query langsung, cepet)
-6. Backend cek udah absen apa belum hari ini (batas hari WIB)
-7. Kalo belum -> hitung status dari jam scan -> catat -> berhasil
-8. Kalo udah -> return 409
+6. Backend cek jam scan masih dalam jam operasional absen? (WIB)
+   -> kalo di luar: 400 OUTSIDE_ABSEN_HOURS, absen tidak dicatat
+7. Backend cek udah absen apa belum hari ini (batas hari WIB)
+   -> kalo catatannya alfa otomatis (metode "sistem"): ditimpa jadi hasil scan
+   -> kalo catatan lain (scan/manual): 409
+8. Kalo belum -> hitung status dari jam scan -> catat -> berhasil
 ```
+
+**Dua pengaturan jam (jangan ketuker):**
+
+| Env | Fungsi | Default |
+|-----|--------|---------|
+| `ABSEN_JAM_MULAI` / `ABSEN_JAM_SELESAI` | **Jam operasional** — di luar rentang ini scan **ditolak** (`400`), absen tidak dicatat | `06:00` / `12:00` |
+| `ABSEN_BATAS_MASUK` | **Batas keterlambatan** — di dalam jam operasional, lewat jam ini status jadi `Terlambat` | `09:00` |
 
 **Status otomatis dari jam scan:**
 
-Status dihitung dari **jam WIB** waktu scan dibandingkan `ABSEN_BATAS_MASUK` (default `09:00`):
+Status dihitung dari **jam WIB** waktu scan dibandingkan `ABSEN_BATAS_MASUK`:
 
 | Waktu scan (WIB) | Status |
 |------------------|--------|
@@ -646,6 +656,11 @@ Status dihitung dari **jam WIB** waktu scan dibandingkan `ABSEN_BATAS_MASUK` (de
 
 Scan yang berhasil **tidak pernah** otomatis jadi "Tidak Hadir" — paling jauh "Terlambat".
 Status "Tidak Hadir"/Alfa ditentukan oleh alfa otomatis (cron) atau input manual.
+
+**Telat datang setelah ditandai alfa:** alfa otomatis (metode `sistem`, keterangan `Alfa`)
+**bukan** catatan manual, jadi kalo siswa ternyata datang dan scan, catatan itu ditimpa jadi
+`Terlambat` + WA otomatis terkirim, dan response dapat tambahan `"diubah_dari_alfa": true`.
+Catatan hasil scan atau input manual tetap tidak bisa ditimpa (balas `409`).
 
 **WA otomatis:** kalau `WA_KIRIM_OTOMATIS` bukan `"false"` dan siswa punya nomor wali,
 backend kirim WA (status Hadir/Terlambat) ke orang tua via Fonnte secara async.
@@ -719,6 +734,24 @@ Gagal kirim tidak menggagalkan absensi.
   "error_code": "VALIDATION_ERROR"
 }
 ```
+
+**Response 400 -- Scan di luar jam sekolah:**
+
+```json
+{
+  "success": false,
+  "message": "Absen ditolak: sudah lewat jam absen. Jam absen dibuka 06:00 - 12:00 WIB",
+  "error_code": "OUTSIDE_ABSEN_HOURS",
+  "data": {
+    "waktu_scan": "2026-10-12T16:50:11.057Z",
+    "jam_wib": "23:50"
+  }
+}
+```
+
+`alasan` di pesan bisa `"sebelum jam absen dibuka"` (scan pagi-pagi banget) atau
+`"sudah lewat jam absen"` (scan siang/sore/malam). **Absen tidak dicatat** — petugas
+harus input manual kalau memang tetap mau dicatat.
 
 ### 4.2 Absen Manual
 
@@ -1554,9 +1587,24 @@ bukan nempel ke absen kemarin.
 |----------|--------|------------|
 | Scan QR sebelum/tepat batas masuk | `Hadir` | — |
 | Scan QR setelah batas masuk | `Terlambat` | — |
+| Scan QR di luar jam operasional | ❌ ditolak `400` | Absen tidak dicatat |
 | Input manual Hadir (lupa kartu) | `Hadir` | — |
 | Input manual sakit/izin | `Tidak Hadir` | `Sakit` / `Izin` |
 | Lewat jam masuk belum absen (cron) | `Tidak Hadir` | `Alfa` |
+| Scan datang telat setelah ditandai alfa | `Terlambat` | Alfa ditimpa (`diubah_dari_alfa: true`) |
+
+### Ringkasan jam (WIB)
+
+```
+   ditolak    |        diterima         |        ditolak
+   (400)      |     (jam operasional)   |         (400)
+──────────────┼─────────────────────────┼──────────────
+  00:00 ... 06:00       06:00 ... 12:00       12:00 ... 23:59
+                            │
+                        09:00 (ABSEN_BATAS_MASUK)
+                            │
+                   < 09:00 = Hadir, > 09:00 = Terlambat
+```
 
 ### Ringkasan WA
 
@@ -1599,6 +1647,7 @@ bukan nempel ke absen kemarin.
 | `STUDENT_NOT_FOUND` | 404 | Siswa ga ketemu di DB |
 | `NOT_FOUND` | 404 | Data (mis. absensi) ga ketemu |
 | `NO_PHONE` | 400 | Siswa ga punya nomor telepon wali |
+| `OUTSIDE_ABSEN_HOURS` | 400 | Scan di luar jam operasional absen |
 | `ALREADY_ABSENT` | 409 | Udah absen hari ini |
 | `INVALID_QR_CODE` | 400 | Format kode QR salah |
 | `DAPODIK_CONNECTION_ERROR` | 502 | Gagal konek ke Dapodik |
@@ -1694,8 +1743,12 @@ const res = await api.post('/api/absensi/scan', {
 
 if (res.status === 200) {
   const data = res.data.rows;
-  alert(`Absen berhasil!\n${data.nama}\n${data.waktu_absen}`);
+  alert(`Absen berhasil!\n${data.nama}\n${data.status}`);
+  if (data.diubah_dari_alfa) alert('Catatan alfa otomatis diganti jadi Terlambat');
 }
+
+// Kalo 400 OUTSIDE_ABSEN_HOURS (di luar jam sekolah)
+// res.data.message -> "Absen ditolak: sudah lewat jam absen. Jam absen dibuka 06:00 - 12:00 WIB"
 
 // Kalo 409 (udah absen)
 if (res.status === 409) {
