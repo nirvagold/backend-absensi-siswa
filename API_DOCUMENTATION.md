@@ -9,14 +9,16 @@ Base URL: `https://backend-absensi-siswa-mu.vercel.app`
 - [Pertama: Cara Pake Token](#pertama-cara-pake-token)
 - [1. Auth](#1-auth)
 - [2. Siswa](#2-siswa)
-- [3. Kartu QR / PDF](#3-kartu-qr-pdf)
+- [3. Kartu QR / PDF](#3-kartu-qr--pdf)
 - [4. Absensi](#4-absensi)
 - [5. Dashboard](#5-dashboard)
 - [6. Sync Dapodik](#6-sync-dapodik)
 - [7. Notifikasi](#7-notifikasi)
-- [8. Error Codes](#8-error-codes)
-- [9. Akun Test](#9-akun-test)
-- [10. Tips & Trik](#10-tips-trik)
+- [8. Cron Alfa Otomatis](#8-cron-alfa-otomatis)
+- [9. Zona Waktu & Aturan Status](#9-zona-waktu--aturan-status)
+- [10. Error Codes](#10-error-codes)
+- [11. Akun Test](#11-akun-test)
+- [12. Tips & Trik](#12-tips--trik)
 
 ---
 
@@ -628,10 +630,26 @@ POST /api/absensi/scan
 3. Kamera scan QR -> dapet peserta_didik_id (UUID)
 4. Frontend kirim POST kode itu ke backend
 5. Backend cari siswa (1 query langsung, cepet)
-6. Backend cek udah absen apa belum hari ini
-7. Kalo belum -> catat -> berhasil
+6. Backend cek udah absen apa belum hari ini (batas hari WIB)
+7. Kalo belum -> hitung status dari jam scan -> catat -> berhasil
 8. Kalo udah -> return 409
 ```
+
+**Status otomatis dari jam scan:**
+
+Status dihitung dari **jam WIB** waktu scan dibandingkan `ABSEN_BATAS_MASUK` (default `09:00`):
+
+| Waktu scan (WIB) | Status |
+|------------------|--------|
+| Sebelum/tepat batas masuk | `Hadir` |
+| Setelah batas masuk | `Terlambat` |
+
+Scan yang berhasil **tidak pernah** otomatis jadi "Tidak Hadir" — paling jauh "Terlambat".
+Status "Tidak Hadir"/Alfa ditentukan oleh alfa otomatis (cron) atau input manual.
+
+**WA otomatis:** kalau `WA_KIRIM_OTOMATIS` bukan `"false"` dan siswa punya nomor wali,
+backend kirim WA (status Hadir/Terlambat) ke orang tua via Fonnte secara async.
+Gagal kirim tidak menggagalkan absensi.
 
 **Response 200 -- Berhasil:**
 
@@ -668,10 +686,10 @@ POST /api/absensi/scan
 ```json
 {
   "success": false,
-  "message": "Siswa sudah absen hari ini pukul 07:12",
+  "message": "Siswa sudah absen hari ini pukul 07:12 WIB",
   "error_code": "ALREADY_ABSENT",
   "data": {
-    "waktu": "2026-09-24T07:12:30.000Z",
+    "waktu": "2026-09-24T00:12:30.000Z",
     "status": "Hadir"
   }
 }
@@ -679,7 +697,7 @@ POST /api/absensi/scan
 
 **Yang harus ditampilkan:**
 
-- Peringatan: "Anunya udah absen jam 07:12"
+- Peringatan: "Anunya udah absen jam 07:12 WIB"
 - Jangan dianggep error, tapi kasih tau aja
 
 **Response 404 -- QR ga dikenal:**
@@ -719,20 +737,33 @@ POST /api/absensi/manual
 ```json
 {
   "peserta_didik_id": "56d41d62-...",
-  "status": "Sakit",
-  "keterangan": "Demam berobat ke puskesmas"
+  "status": "Tidak Hadir",
+  "keterangan": "Sakit"
 }
 ```
 
+**Field:**
+
+| Field | Wajib | Tipe | Keterangan |
+|-------|-------|------|------------|
+| `peserta_didik_id` | ✅ Ya | string | UUID siswa |
+| `status` | ✅ Ya | string | Salah satu dari tabel di bawah |
+| `keterangan` | ⚠️ Kondisional | string | **Wajib** kalau `status = "Tidak Hadir"` — isinya `Izin`, `Sakit`, atau `Alfa` |
+
 **Status yang valid:**
 
-| Status | Kapan dipake |
-|--------|-------------|
-| `Hadir` | Siswa hadir tapi ga bawa kartu |
-| `Terlambat` | Datang telat |
-| `Izin` | Ada surat izin |
-| `Sakit` | Ada surat dokter / keterangan sakit |
-| `Tidak Hadir` | Alfa tanpa keterangan |
+| Status | Kapan dipake | Keterangan |
+|--------|-------------|------------|
+| `Hadir` | Siswa hadir tapi ga bawa kartu | Opsional (bebas) |
+| `Terlambat` | Datang telat | Opsional (bebas) |
+| `Tidak Hadir` | Ga masuk sekolah | **Wajib**: `Izin` / `Sakit` / `Alfa` |
+| `Izin` | Ada surat izin | — (legacy, tetap diterima) |
+| `Sakit` | Ada surat dokter / keterangan sakit | — (legacy, tetap diterima) |
+
+> **Catatan:** cara yang dianjurkan sekarang adalah `status: "Tidak Hadir"` + `keterangan`
+> berisi `Izin`/`Sakit`/`Alfa`, biar semua ketidakhadiran konsisten dihitung di dashboard
+> dan flagging siswa bermasalah. Status `Izin`/`Sakit` lama tetap diterima biar data & frontend
+> yang lama ga rusak.
 
 **Response 200:**
 
@@ -745,14 +776,17 @@ POST /api/absensi/manual
   "rows": {
     "absensi_id": "uuid",
     "peserta_didik_id": "56d41d62-...",
-    "tanggal": "2026-09-24",
-    "waktu_absen": "2026-09-24T08:30:00.000Z",
-    "status": "Sakit",
+    "tanggal": "2026-10-12T00:00:00.000Z",
+    "waktu_absen": "2026-10-12T01:30:00.000Z",
+    "status": "Tidak Hadir",
     "metode": "manual",
-    "keterangan": "Demam berobat ke puskesmas"
+    "keterangan": "Sakit"
   }
 }
 ```
+
+> `tanggal` disimpan sebagai tengah malam UTC dari tanggal **WIB**. `waktu_absen` dikirim
+> dalam ISO UTC — konversi ke WIB (+7) buat ditampilin.
 
 **Response 409 -- Udah absen:**
 
@@ -773,6 +807,30 @@ POST /api/absensi/manual
   "error_code": "VALIDATION_ERROR"
 }
 ```
+
+**Response 400 -- "Tidak Hadir" tanpa keterangan:**
+
+```json
+{
+  "success": false,
+  "message": "Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alfa",
+  "error_code": "VALIDATION_ERROR"
+}
+```
+
+**Response 404 -- Siswa ga ketemu:**
+
+```json
+{
+  "success": false,
+  "message": "Siswa tidak ditemukan",
+  "error_code": "STUDENT_NOT_FOUND"
+}
+```
+
+**WA otomatis:** kalau `WA_KIRIM_OTOMATIS` bukan `"false"`, WA dikirim otomatis **hanya untuk
+status `Hadir` dan `Terlambat`**. Izin/Sakit/Alfa/Tidak Hadir **tidak** auto-kirim —
+admin kirim manual lewat [7.2 Kirim WA Manual](#72-kirim-wa-manual).
 
 ### 4.3 Absensi Hari Ini
 
@@ -903,6 +961,104 @@ GET /api/absensi/siswa/:peserta_didik_id
       "metode": "scan"
     }
   ]
+}
+```
+
+### 4.6 Edit Absensi
+
+Buat ngubah status/keterangan absensi yang udah tercatat. Kasus utama: siswa ditandai
+**Alfa otomatis** oleh cron, ternyata bawa surat izin -> admin edit jadi Izin.
+
+**Endpoint:**
+
+```
+PUT /api/absensi/:absensi_id
+```
+
+**Header:** `Authorization: Bearer {token}` (Admin / Guru)
+
+**Body:** (kirim yang mau diubah aja, minimal salah satu)
+
+```json
+{
+  "status": "Tidak Hadir",
+  "keterangan": "Izin"
+}
+```
+
+**Aturan validasi:** sama kayak absen manual — `status` harus salah satu dari
+Hadir/Terlambat/Izin/Sakit/Tidak Hadir, dan kalau `status = "Tidak Hadir"` maka
+`keterangan` wajib `Izin` / `Sakit` / `Alfa`.
+
+**Response 200:**
+
+```json
+{
+  "results": 1,
+  "id": "absensi_id",
+  "start": 0,
+  "limit": 1,
+  "rows": {
+    "absensi_id": "uuid",
+    "peserta_didik_id": "56d41d62-...",
+    "tanggal": "2026-10-12T00:00:00.000Z",
+    "waktu_absen": "2026-10-12T00:00:00.000Z",
+    "status": "Tidak Hadir",
+    "metode": "sistem",
+    "keterangan": "Izin",
+    "petugas_id": "uuid-admin"
+  }
+}
+```
+
+**Response 404 -- Absensi ga ketemu:**
+
+```json
+{
+  "success": false,
+  "message": "Absensi tidak ditemukan",
+  "error_code": "NOT_FOUND"
+}
+```
+
+**Response 400 -- Status ga valid / keterangan kurang:**
+
+```json
+{
+  "success": false,
+  "message": "Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alfa",
+  "error_code": "VALIDATION_ERROR"
+}
+```
+
+### 4.7 Hapus Absensi
+
+**Endpoint:**
+
+```
+DELETE /api/absensi/:absensi_id
+```
+
+**Header:** `Authorization: Bearer {token}` (**Admin saja**)
+
+Log notifikasi WA yang nyambung ke absensi ini ikut dihapus otomatis.
+
+**Response 200:**
+
+```json
+{
+  "success": true,
+  "message": "Absensi berhasil dihapus"
+}
+```
+
+**Response 403 -- Bukan admin:**
+
+```json
+{
+  "success": false,
+  "message": "Hanya admin yang bisa menghapus absensi",
+  "error_code": "FORBIDDEN_ACCESS"
 }
 ```
 
@@ -1165,15 +1321,254 @@ GET /api/sync/dapodik/history
 
 ## 7. Notifikasi
 
+WA dikirim lewat **Fonnte** (bukan Meta API). Kalau `FONNTE_TOKEN` belum diset,
+pengiriman balas `{ status: "gagal", error: "FONNTE_TOKEN belum diset" }` dan tetap dicatat di log.
+
+### 7.1 Log Notifikasi
+
 ```
 GET /api/notifikasi/log
 ```
 
-> **Catatan:** Ini masih tabel doang. Kirim WA beneran belum aktif -- nunggu setup token Meta API.
+**Header:** `Authorization: Bearer {token}` (**Admin saja**)
+
+Ambil 50 log terakhir. Response:
+
+```json
+{
+  "results": 12,
+  "id": "notifikasi_id",
+  "rows": [
+    {
+      "notifikasi_id": "uuid",
+      "absensi_id": "uuid-absensi",
+      "nomor_tujuan": "081234567890",
+      "pesan": "Absen: ANNASYA AZRA IZZATUNNISA - Hadir",
+      "status": "dikirim",
+      "created_at": "2026-10-12T01:30:05.000Z"
+    }
+  ]
+}
+```
+
+### 7.2 Kirim WA Manual
+
+Kirim (atau kirim ulang) WA hasil absen ke wali siswa. Dipake buat status yang
+**tidak** auto-kirim: Izin, Sakit, Alfa, Tidak Hadir.
+
+**Endpoint:**
+
+```
+POST /api/notifikasi/kirim/:absensi_id
+```
+
+**Header:** `Authorization: Bearer {token}` (Admin / Guru)
+
+**Body:** kosong
+
+**Response 200:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "dikirim"
+  }
+}
+```
+
+Kalau Fonnte nolak, `status` jadi `"gagal"` + ada `error` (tapi HTTP tetap 200,
+dan kegagalan tetap dicatat di log):
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "gagal",
+    "error": "token tidak valid"
+  }
+}
+```
+
+**Response 404 -- Absensi ga ketemu:**
+
+```json
+{
+  "success": false,
+  "message": "Absensi tidak ditemukan",
+  "error_code": "NOT_FOUND"
+}
+```
+
+**Response 400 -- Siswa ga punya nomor wali:**
+
+```json
+{
+  "success": false,
+  "message": "Nomor telepon wali siswa tidak tersedia",
+  "error_code": "NO_PHONE"
+}
+```
+
+### 7.3 Setting Notifikasi
+
+**Endpoint:**
+
+```
+GET /api/notifikasi/setting
+```
+
+**Header:** `Authorization: Bearer {token}` (**Admin saja**)
+
+```json
+{
+  "results": 1,
+  "id": "wa_otomatis",
+  "rows": {
+    "wa_otomatis": true
+  }
+}
+```
+
+`wa_otomatis` dibaca dari env `WA_KIRIM_OTOMATIS` (`"false"` = mati).
+
+### 7.4 Test Kirim WA
+
+```
+POST /api/notifikasi/test
+```
+
+**Header:** `Authorization: Bearer {token}` (**Admin saja**)
+
+**Body:**
+
+```json
+{
+  "nomor": "081234567890",
+  "pesan": "Test notifikasi dari Sistem Absensi QR"
+}
+```
+
+`pesan` opsional. Response sama kayak 7.2 (`{ success: true, data: { status } }`).
+
+### Isi Pesan WA
+
+```
+Assalamualaikum Wr. Wb.
+
+Yth. Bpk/Ibu Wali dari {nama}
+
+{nama} telah absen masuk pada:
+Jam: {HH:MM} WIB
+Status: {status}
+Tanggal: {YYYY-MM-DD}
+
+-- SDN 2 Garumukti
+```
 
 ---
 
-## 8. Error Codes
+## 8. Cron Alfa Otomatis
+
+Siswa yang **sampai lewat jam masuk (`ABSEN_BATAS_MASUK`, default 09:00 WIB) belum absen**
+otomatis ditandai:
+`status = "Tidak Hadir"`, `keterangan = "Alfa"`, `metode = "sistem"`.
+Bisa diedit jadi Izin/Sakit lewat [4.6 Edit Absensi](#46-edit-absensi).
+
+**Endpoint:**
+
+```
+GET /api/cron/alfa
+GET /api/cron/alfa?tanggal=YYYY-MM-DD
+```
+
+**Header (pilih salah satu):**
+
+- `Authorization: Bearer {CRON_SECRET}` (dipakai Vercel Cron)
+- `x-cron-secret: {CRON_SECRET}`
+
+`tanggal` opsional (default hari ini WIB) — buat nandai alfa di tanggal lampau.
+
+**Response 200:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "sekolah_id": "uuid-sekolah",
+      "sekolah_nama": "SDN 2 GARUMUKTI",
+      "total_siswa": 301,
+      "sudah_absen": 250,
+      "ditandai": 51
+    }
+  ]
+}
+```
+
+**Response 401 -- Secret salah / ga ada:**
+
+```json
+{
+  "success": false,
+  "message": "Secret tidak valid",
+  "error_code": "CRON_UNAUTHORIZED"
+}
+```
+
+**Response 503 -- `CRON_SECRET` belum diset di server:**
+
+```json
+{
+  "success": false,
+  "message": "CRON_SECRET belum diset",
+  "error_code": "CRON_UNCONFIGURED"
+}
+```
+
+**Siapa yang manggil:**
+
+- **Vercel** (serverless): Vercel Cron di `vercel.json` — `0 2 * * *` UTC (= **09:00 WIB**) — otomatis manggil endpoint ini tiap hari. Set `CRON_SECRET` di dashboard Vercel.
+- **Railway / server long-running**: scheduler in-proses di `src/index.js` (cek tiap menit, jalan sekali sehari setelah jam masuk WIB). Matikan dengan `JADWAL_JOBS=false`.
+- **Manual**: panggil endpointnya pake curl / Postman.
+
+Aman dipanggil berkali-kali (idempotent) — siswa yang udah punya absensi hari itu di-skip.
+
+---
+
+## 9. Zona Waktu & Aturan Status
+
+### Zona waktu
+
+Semua perhitungan hari dan jam pakai **WIB (UTC+7)**, ga bergantung timezone server
+(Vercel jalan di UTC). Jadi absen jam 00:30 WIB dihitung sebagai **hari baru**,
+bukan nempel ke absen kemarin.
+
+- Kolom `tanggal` = tengah malam UTC dari tanggal WIB (mis. `2026-10-12T00:00:00.000Z`).
+- Field `waktu_absen` selalu ISO UTC — tambah 7 jam buat nampilin WIB.
+- Query `tanggal_mulai` / `tanggal_selesai` pakai tanggal WIB, dan `tanggal_selesai` **inklusif**.
+
+### Ringkasan aturan status
+
+| Kejadian | Status | Keterangan |
+|----------|--------|------------|
+| Scan QR sebelum/tepat batas masuk | `Hadir` | — |
+| Scan QR setelah batas masuk | `Terlambat` | — |
+| Input manual Hadir (lupa kartu) | `Hadir` | — |
+| Input manual sakit/izin | `Tidak Hadir` | `Sakit` / `Izin` |
+| Lewat jam masuk belum absen (cron) | `Tidak Hadir` | `Alfa` |
+
+### Ringkasan WA
+
+| Status | WA otomatis | WA manual |
+|--------|-------------|-----------|
+| `Hadir` | ✅ (kalau `WA_KIRIM_OTOMATIS` ≠ `"false"`) | ✅ |
+| `Terlambat` | ✅ (kalau `WA_KIRIM_OTOMATIS` ≠ `"false"`) | ✅ |
+| `Tidak Hadir` (Izin/Sakit/Alfa) | ❌ | ✅ |
+
+---
+
+## 10. Error Codes
 
 ### HTTP Status Codes
 
@@ -1199,13 +1594,17 @@ GET /api/notifikasi/log
 | `TOKEN_EXPIRED` | 401 | Token kedaluwarsa, suruh login ulang |
 | `TOKEN_MISSING` | 401 | Header Authorization ga ada |
 | `TOKEN_INVALID` | 401 | Token palsu / corrupted |
+| `CRON_UNAUTHORIZED` | 401 | Secret cron salah / ga dikirim |
 | `FORBIDDEN_ACCESS` | 403 | Role user ga berhak akses |
 | `STUDENT_NOT_FOUND` | 404 | Siswa ga ketemu di DB |
+| `NOT_FOUND` | 404 | Data (mis. absensi) ga ketemu |
+| `NO_PHONE` | 400 | Siswa ga punya nomor telepon wali |
 | `ALREADY_ABSENT` | 409 | Udah absen hari ini |
 | `INVALID_QR_CODE` | 400 | Format kode QR salah |
 | `DAPODIK_CONNECTION_ERROR` | 502 | Gagal konek ke Dapodik |
 | `DAPODIK_CONFIG_MISSING` | 400 | URL / token Dapodik blom diatur |
 | `SYNC_IN_PROGRESS` | 409 | Sync lagi jalan |
+| `CRON_UNCONFIGURED` | 503 | `CRON_SECRET` belum diset di server |
 | `VALIDATION_ERROR` | 400 / 422 | Field wajib kosong / format salah |
 | `SISWA_ALREADY_EXISTS` | 409 | NISN udah terdaftar |
 | `RATE_LIMIT_EXCEEDED` | 429 | Kegencet tombol terlalu cepet |
@@ -1230,7 +1629,7 @@ Bagian `errors` cuma muncul kalo ada validasi multiple field.
 
 ---
 
-## 9. Akun Test
+## 11. Akun Test
 
 | Role | Username | Password |
 |------|----------|----------|
@@ -1239,7 +1638,7 @@ Bagian `errors` cuma muncul kalo ada validasi multiple field.
 
 ---
 
-## 10. Tips & Trik
+## 12. Tips & Trik
 
 ### Pagination
 
@@ -1304,6 +1703,28 @@ if (res.status === 409) {
 }
 ```
 
+**Status dihitung otomatis** dari jam scan (WIB) vs `ABSEN_BATAS_MASUK` — lewat batas
+langsung dapet `status: "Terlambat"`, ga perlu ditentuin frontend.
+
+### Flow Edit Absen Alfa jadi Izin
+
+```javascript
+// Alfa otomatis udah ditandai cron (status: "Tidak Hadir", keterangan: "Alfa")
+// Ternyata siswa bawa surat izin -> admin edit:
+await api.put(`/api/absensi/${absensi_id}`, {
+  status: 'Tidak Hadir',
+  keterangan: 'Izin'
+});
+```
+
+### Flow Kirim WA Manual
+
+```javascript
+// Otomatis cuma buat Hadir/Terlambat. Buat Izin/Sakit/Alfa, admin kirim sendiri:
+await api.post(`/api/notifikasi/kirim/${absensi_id}`);
+// -> { success: true, data: { status: "dikirim" } }
+```
+
 ### Flow Download PDF Kartu
 
 ```javascript
@@ -1317,7 +1738,9 @@ await api.post('/api/siswa/kartu-qr/bulk', { kelas: 'KELAS 3A' }, { responseType
 ### Notes Penting
 
 1. **QR code isinya:** `peserta_didik_id` (UUID). Langsung kirim ke backend, ga perlu diolah lagi
-2. **Format waktu:** ISO 8601. Tinggal `new Date(data.waktu_absen).toLocaleTimeString('id-ID')`
+2. **Format waktu:** ISO 8601 UTC. Tambah 7 jam buat WIB — `new Date(data.waktu_absen).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })`
 3. **Nama field:** `snake_case` semua. Jangan pake camelCase
 4. **Display value:** pake field yang ada `_str` kalo perlu teks (contoh: `agama_id_str`)
 5. **Kelas:** namanya `KELAS 3A`, `KELAS 1B`, dll. Pake spasi. Kalo mau filter, URL encode jadi `KELAS%203A`
+6. **Tidak hadir:** pakai `status: "Tidak Hadir"` + `keterangan` (`Izin`/`Sakit`/`Alfa`) — bukan status terpisah
+7. **Hari absensi:** batasnya jam **00:00 WIB**, bukan UTC. Absen jam 00:30 WIB masuk hari baru

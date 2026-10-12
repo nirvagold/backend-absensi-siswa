@@ -32,6 +32,7 @@ app.use("/api/kelas", require("./routes/kelas"));
 app.use("/api/sync/dapodik", require("./routes/sync"));
 app.use("/api/dashboard", require("./routes/dashboard"));
 app.use("/api/notifikasi", require("./routes/notifikasi").router);
+app.use("/api/cron", require("./routes/cron"));
 
 // ── 404 ──
 app.use((req, res) => {
@@ -58,6 +59,38 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`✅ Backend nyala di http://localhost:${PORT}`);
   });
+
+  // ── Scheduler dalam-proses (fallback utk long-running process, mis. Railway) ──
+  // Menjalankan job alfa otomatis sekali sehari di jam masuk
+  // (ABSEN_BATAS_MASUK, default 9:00 WIB). Nonaktifkan dgn env JADWAL_JOBS=false.
+  // Pada Vercel (serverless), Vercel Cron-lah yang memanggil /api/cron/alfa.
+  const { tandaiAlfaSemuaSekolah, batasMasukMenit } = require("./scripts/alfa");
+  const { menitWIB, tanggalStrWIB } = require("./utils/waktu");
+
+  if (process.env.JADWAL_JOBS !== "false") {
+    const targetMenit = batasMasukMenit();
+    let lastRunDay = "";
+
+    setInterval(async () => {
+      try {
+        const now = new Date();
+        // Hari & jam pakai WIB, bukan jam server (Railway/Vercel jalan di UTC).
+        const todayKey = tanggalStrWIB(now);
+        const menitSekarang = menitWIB(now);
+
+        // Jalankan sekali per hari: setelah clock WIB melewati batas jam masuk,
+        // dan belum dijalankan hari ini.
+        if (menitSekarang >= targetMenit && lastRunDay !== todayKey) {
+          lastRunDay = todayKey;
+          console.log(`[scheduler] menjalankan penandaan alfa otomatis ${todayKey} (WIB)`);
+          await tandaiAlfaSemuaSekolah();
+          console.log("[scheduler] selesai.");
+        }
+      } catch (e) {
+        console.error("[scheduler] err:", e.message);
+      }
+    }, 60 * 1000);
+  }
 }
 
 module.exports = app;

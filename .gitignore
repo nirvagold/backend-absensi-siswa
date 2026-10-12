@@ -12,3 +12,7 @@ generate-*.js
 .claude/
 buat-laporan.js
 gen-doc-v12.js
+buat-surat.js
+buat-surat-okeweb.js
+CATATAN_WHATSAPP_META.md
+CATATAN_WA_OKEWEB.md

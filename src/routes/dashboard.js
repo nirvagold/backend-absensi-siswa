@@ -2,16 +2,14 @@ const router = require("express").Router();
 const prisma = require("../config/prisma");
 const { authMiddleware } = require("../middleware/auth");
 const { dapodikResponse, errorResponse } = require("../utils/response");
+const { rentangHariWIB, awalHariWIBOffset, tanggalStrWIB } = require("../utils/waktu");
 
 const auth = authMiddleware();
 
 // GET /api/dashboard/ringkasan
 router.get("/ringkasan", auth, async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const besok = new Date(today);
-    besok.setDate(besok.getDate() + 1);
+    const { awal: today, akhir: besok } = rentangHariWIB(new Date());
 
     const where = { tanggal: { gte: today, lt: besok }, sekolah_id: req.user.sekolah_id };
 
@@ -42,7 +40,7 @@ router.get("/ringkasan", auth, async (req, res) => {
     const tidak_hadir = absensi.filter((a) => a.status === "Tidak Hadir").length;
 
     const data = {
-      tanggal: today.toISOString().split("T")[0],
+      tanggal: tanggalStrWIB(today),
       total_siswa,
       hadir,
       terlambat,
@@ -94,11 +92,7 @@ router.get("/tren", auth, async (req, res) => {
     const data = [];
 
     for (let i = 6; i >= 0; i--) {
-      const tgl = new Date(now);
-      tgl.setDate(tgl.getDate() - i);
-      tgl.setHours(0, 0, 0, 0);
-      const besok = new Date(tgl);
-      besok.setDate(besok.getDate() + 1);
+      const { awal: tgl, akhir: besok } = rentangHariWIB(awalHariWIBOffset(now, -i));
 
       const total = await prisma.siswa.count({ where: { sekolah_id: req.user.sekolah_id, is_active: true } });
       const hadirCount = await prisma.absensi.count({
@@ -106,7 +100,7 @@ router.get("/tren", auth, async (req, res) => {
       });
 
       data.push({
-        tanggal: tgl.toISOString().split("T")[0],
+        tanggal: tanggalStrWIB(tgl),
         hadir: hadirCount,
         persentase: total > 0 ? +((hadirCount / total) * 100).toFixed(1) : 0,
       });
@@ -121,11 +115,7 @@ router.get("/tren", auth, async (req, res) => {
 // GET /api/dashboard/per-kelas
 router.get("/per-kelas", auth, async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const besok = new Date(today);
-    besok.setDate(besok.getDate() + 1);
-
+    const { awal: today, akhir: besok } = rentangHariWIB(new Date());
     const kelasList = await prisma.siswa.groupBy({
       by: ["nama_rombel"],
       where: { sekolah_id: req.user.sekolah_id, is_active: true, nama_rombel: { not: null } },

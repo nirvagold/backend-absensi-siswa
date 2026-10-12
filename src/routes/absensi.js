@@ -2,7 +2,9 @@ const router = require("express").Router();
 const prisma = require("../config/prisma");
 const { authMiddleware } = require("../middleware/auth");
 const { dapodikResponse, errorResponse } = require("../utils/response");
-const { kirimWA } = require("./notifikasi");
+const { statusDariJam } = require("../config/absensi");
+const { rentangHariWIB, jamStrWIB, tanggalStrWIB, dariTanggalStr } = require("../utils/waktu");
+const { kirimWA, buatPesanAbsen, catatLog, waOtomatis } = require("./notifikasi");
 
 const auth = authMiddleware();
 const guruAuth = authMiddleware(["Admin", "Guru"]);
@@ -24,11 +26,8 @@ router.post("/scan", guruAuth, async (req, res) => {
       return res.status(404).json(errorResponse("QR Code tidak dikenali. Siswa tidak ditemukan", "STUDENT_NOT_FOUND", 404));
     }
 
-    // Cek udah absen belum hari ini
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const besok = new Date(today);
-    besok.setDate(besok.getDate() + 1);
+    // Cek udah absen belum hari ini (pakai batas hari WIB, bukan jam server)
+    const { awal: today, akhir: besok } = rentangHariWIB(new Date());
 
     const existing = await prisma.absensi.findFirst({
       where: {
@@ -40,19 +39,24 @@ router.post("/scan", guruAuth, async (req, res) => {
     if (existing) {
       return res.status(409).json({
         success: false,
-        message: `Siswa sudah absen hari ini pukul ${existing.waktu_absen.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}`,
+        message: `Siswa sudah absen hari ini pukul ${jamStrWIB(existing.waktu_absen)} WIB`,
         error_code: "ALREADY_ABSENT",
         data: { waktu: existing.waktu_absen, status: existing.status },
       });
     }
 
-    // Catat absensi
+    // Catat absensi. Status dihitung dari waktu scan vs batas jam (POINT #3).
+    // Scan selalu berarti siswa hadir, paling jauh dianggap "Terlambat".
+    const wallTime = new Date(); // waktu scan sebenarnya
+    const statusScan = statusDariJam(wallTime) || "Hadir";
+
     const absen = await prisma.absensi.create({
       data: {
         peserta_didik_id: siswa.peserta_didik_id,
         sekolah_id: siswa.sekolah_id,
         tanggal: today,
-        status: "Hadir",
+        waktu_absen: wallTime,
+        status: statusScan,
         metode: "scan",
         sesi_id: sesi_id || null,
         petugas_id: req.user.pengguna_id,
@@ -65,24 +69,20 @@ router.post("/scan", guruAuth, async (req, res) => {
       nisn: siswa.nisn,
       nama: siswa.nama,
       nama_rombel: siswa.nama_rombel,
-      tanggal: today.toISOString().split("T")[0],
+      tanggal: tanggalStrWIB(today),
       waktu_absen: absen.waktu_absen.toISOString(),
+      status: absen.status,
     };
 
-    // Kirim WA ke ortu (async, gagal gapapa)
-    if (siswa.nomor_telepon_seluler) {
-      kirimWA(siswa.nomor_telepon_seluler,
-        `Assalamualaikum Wr. Wb.\n\nYth. Bpk/Ibu Wali dari ${siswa.nama}\n\n${siswa.nama} telah absen masuk pada:\nJam: ${absen.waktu_absen.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}\nStatus: Hadir\nTanggal: ${today.toISOString().split("T")[0]}\n\n-- SDN 2 Garumukti`
-      ).then(async (resWA) => {
-        await prisma.notifikasi_log.create({
-          data: {
-            absensi_id: absen.absensi_id,
-            nomor_tujuan: siswa.nomor_telepon_seluler,
-            pesan: `Absen: ${siswa.nama} - Hadir`,
-            status: resWA.status,
-          },
-        });
-      }).catch(() => {});
+    // Kirim WA otomatis hanya jika setting menyalakan (POINT #1),
+    // dan hanya untuk status kehadiran yang butuh info ortu (Hadir/Terlambat).
+    if (waOtomatis() && siswa.nomor_telepon_seluler && ["Hadir", "Terlambat"].includes(absen.status)) {
+      const pesan = buatPesanAbsen(siswa, absen);
+      kirimWA(siswa.nomor_telepon_seluler, pesan)
+        .then(async (resWA) => {
+          await catatLog(absen.absensi_id, siswa.nomor_telepon_seluler, `Absen: ${siswa.nama} - ${absen.status}`, resWA);
+        })
+        .catch(() => {});
     }
 
     res.json(dapodikResponse(hasil, { idField: "absensi_id", limit: 1 }));
@@ -105,16 +105,21 @@ router.post("/manual", guruAuth, async (req, res) => {
       return res.status(400).json(errorResponse("Status tidak valid", "VALIDATION_ERROR"));
     }
 
+    // POINT #4: kalau status "Tidak Hadir", wajib pilih keterangan Izin/Sakit/Alfa.
+    const keteranganIzinSakitAlfa = ["Izin", "Sakit", "Alfa"];
+    if (status === "Tidak Hadir") {
+      if (!keterangan || !keteranganIzinSakitAlfa.includes(keterangan)) {
+        return res.status(400).json(errorResponse("Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alfa", "VALIDATION_ERROR"));
+      }
+    }
+
     // Validasi siswa ada
     const siswaAda = await prisma.siswa.findUnique({ where: { peserta_didik_id } });
     if (!siswaAda) {
       return res.status(404).json(errorResponse("Siswa tidak ditemukan", "STUDENT_NOT_FOUND", 404));
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const besok = new Date(today);
-    besok.setDate(besok.getDate() + 1);
+    const { awal: today, akhir: besok } = rentangHariWIB(new Date());
 
     // Cek dulu udah absen apa belum
     const existing = await prisma.absensi.findFirst({
@@ -143,6 +148,23 @@ router.post("/manual", guruAuth, async (req, res) => {
       },
     });
 
+    // Kirim WA otomatis ke ortu (POINT #1) HANYA untuk status kehadiran
+    // (Hadir/Terlambat). Izin/Sakit/Tidak Hadir/Alfa tidak auto-kirim --
+    // admin bisa kirim manual lewat POST /api/notifikasi/kirim/:absensi_id.
+    if (waOtomatis() && siswaAda.nomor_telepon_seluler && ["Hadir", "Terlambat"].includes(status)) {
+      const siswaPayload = { nama: siswaAda.nama };
+      const absenPayload = {
+        ...absen,
+        status: status === "Tidak Hadir" ? `${status} (${keterangan})` : status,
+      };
+      const pesan = buatPesanAbsen(siswaPayload, absenPayload);
+      kirimWA(siswaAda.nomor_telepon_seluler, pesan)
+        .then(async (resWA) => {
+          await catatLog(absen.absensi_id, siswaAda.nomor_telepon_seluler, `Absen: ${siswaAda.nama} - ${status}${keterangan ? ` (${keterangan})` : ""}`, resWA);
+        })
+        .catch(() => {});
+    }
+
     res.json(dapodikResponse(absen, { idField: "absensi_id", limit: 1 }));
   } catch (err) {
     console.error("Manual absen error:", err);
@@ -153,10 +175,7 @@ router.post("/manual", guruAuth, async (req, res) => {
 // GET /api/absensi/hari-ini
 router.get("/hari-ini", auth, async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const besok = new Date(today);
-    besok.setDate(besok.getDate() + 1);
+    const { awal: today, akhir: besok } = rentangHariWIB(new Date());
 
     let whereAbsen = { tanggal: { gte: today, lt: besok } };
     if (req.user.peran_id_str === "Guru" && req.user.nama_rombel) {
@@ -195,8 +214,16 @@ router.get("/", auth, async (req, res) => {
     const skip = (page - 1) * limit;
 
     const where = {};
-    if (req.query.tanggal_mulai) where.tanggal = { gte: new Date(req.query.tanggal_mulai) };
-    if (req.query.tanggal_selesai) where.tanggal = { ...where.tanggal, lte: new Date(req.query.tanggal_selesai) };
+    // tanggal_mulai & tanggal_selesai: "YYYY-MM-DD" WIB (inklusif dua-duanya)
+    if (req.query.tanggal_mulai || req.query.tanggal_selesai) {
+      const mulai = dariTanggalStr(req.query.tanggal_mulai);
+      const selesai = dariTanggalStr(req.query.tanggal_selesai);
+      if (mulai) where.tanggal = { gte: mulai };
+      if (selesai && selesai !== null) {
+        const akhir = new Date(selesai.getTime() + 24 * 60 * 60 * 1000);
+        where.tanggal = { ...where.tanggal, lt: akhir };
+      }
+    }
     if (req.query.kelas) where.siswa = { nama_rombel: req.query.kelas };
     if (req.query.status) where.status = req.query.status;
 
@@ -217,7 +244,7 @@ router.get("/", auth, async (req, res) => {
       nisn: a.siswa.nisn,
       nama: a.siswa.nama,
       nama_rombel: a.siswa.nama_rombel,
-      tanggal: a.tanggal.toISOString().split("T")[0],
+      tanggal: tanggalStrWIB(a.tanggal),
       waktu_absen: a.waktu_absen.toISOString(),
       status: a.status,
       metode: a.metode,
@@ -230,6 +257,47 @@ router.get("/", auth, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json(errorResponse("Gagal mengambil riwayat absensi", "INTERNAL_ERROR", 500));
+  }
+});
+
+// PUT /api/absensi/:id — ubah status/keterangan absensi.
+// Dipakai untuk "edit alfa jadi izin/sakit" (POINT: alfa bisa diedit).
+router.put("/:id", guruAuth, async (req, res) => {
+  try {
+    const { status, keterangan } = req.body;
+
+    const absen = await prisma.absensi.findUnique({ where: { absensi_id: req.params.id } });
+    if (!absen) {
+      return res.status(404).json(errorResponse("Absensi tidak ditemukan", "NOT_FOUND", 404));
+    }
+
+    // Kalau status diberikan, validasi.
+    if (status) {
+      const validStatus = ["Hadir", "Terlambat", "Izin", "Sakit", "Tidak Hadir"];
+      if (!validStatus.includes(status)) {
+        return res.status(400).json(errorResponse("Status tidak valid", "VALIDATION_ERROR"));
+      }
+
+      // Sama seperti manual: "Tidak Hadir" wajib keterangan Izin/Sakit/Alfa.
+      if (status === "Tidak Hadir") {
+        if (!keterangan || !["Izin", "Sakit", "Alfa"].includes(keterangan)) {
+          return res.status(400).json(errorResponse("Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alfa", "VALIDATION_ERROR"));
+        }
+      }
+    }
+
+    const updated = await prisma.absensi.update({
+      where: { absensi_id: req.params.id },
+      data: {
+        ...(status !== undefined && status !== null ? { status } : {}),
+        ...(keterangan !== undefined ? { keterangan: keterangan || null } : {}),
+      },
+    });
+
+    res.json(dapodikResponse(updated, { idField: "absensi_id", limit: 1 }));
+  } catch (err) {
+    console.error("Update absensi error:", err);
+    res.status(500).json(errorResponse("Gagal memperbarui absensi", "INTERNAL_ERROR", 500));
   }
 });
 
