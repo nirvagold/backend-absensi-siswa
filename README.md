@@ -8,6 +8,8 @@ Base URL: `https://backend-absensi-siswa-mu.vercel.app`
 
 Dokumentasi lengkap: [`API_DOCUMENTATION.md`](API_DOCUMENTATION.md)
 
+Catatan sinkronisasi buat tim frontend: [`CATATAN_FRONTEND.md`](CATATAN_FRONTEND.md)
+
 ### Quick Start
 
 ```bash
