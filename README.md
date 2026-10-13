@@ -110,10 +110,12 @@ src/
     pengaturan.js       setelan per sekolah di DB (mis. mode WA)
   scripts/
     alpha.js             tandai alpha otomatis (siswa belum absen)
+    dummy.js             bersihin DB + bikin siswa dummy buat testing
   utils/
     response.js         helper format dapodik
     waktu.js            util zona waktu WIB (UTC-safe)
     kartu.js            render kartu pelajar PDF (tema ilustrasi)
+    dapodik.js          saring data Dapodik (per kelas/tingkat)
   prisma/
     schema.prisma       schema database
     seed.js             data awal (admin+guru)
@@ -128,6 +130,9 @@ src/
    ngrok http 5774
    ```
    Dapet url kaya `https://xxxx.ngrok-free.dev`
+
+   Kalau backend-nya jalan di komputer yang sama dengan Dapodik, bisa langsung
+   pakai `http://localhost:5774` tanpa ngrok.
 
 2. Hit endpoint:
    ```bash
@@ -146,6 +151,46 @@ src/
    - `rombongan_belajar` -- wali kelas doang
 
    ~2 menit, 302 siswa + 8 akun guru + 12 wali kelas masuk.
+
+### Tarik per kelas (buat testing)
+
+Narik 302 siswa sekaligus berat buat ngetes. Tambahin `kelas` atau `tingkat`
+biar cuma sebagian yang masuk:
+
+```json
+{ "tipe": "peserta_didik", "kelas": "KELAS 1A" }
+{ "tipe": "peserta_didik", "kelas": "kelas 2a, KELAS 2B" }
+{ "tipe": "peserta_didik", "tingkat": "6" }
+```
+
+- `kelas` -- nama rombel, boleh lebih dari satu dipisah koma/array. Ga peka huruf besar-kecil.
+- `tingkat` -- `tingkat_pendidikan_id`, mis. `"6"` = kelas 6A + 6B.
+- Dua-duanya kosong = tarik semua (perilaku lama).
+- Siswa yang sudah ada di-update, yang belum ada ditambah. Aman dijalanin berulang.
+
+Mau lihat kelas apa aja yang ada di Dapodik dulu:
+
+```bash
+GET /api/sync/dapodik/kelas-dapodik
+```
+
+Balikin daftar rombel + jumlah di Dapodik vs jumlah yang sudah ada di DB.
+
+Response sync menyertakan `peserta_didik.daftar_gagal` kalau ada siswa yang gagal
+masuk (beserta alasannya), jadi ga ada yang hilang diam-diam.
+
+### Data dummy buat testing
+
+```bash
+node src/scripts/dummy.js                        # lihat rencana dulu (ga ngubah apa-apa)
+node src/scripts/dummy.js --ya                   # bersihin DB + bikin 5 siswa dummy
+node src/scripts/dummy.js --ya --kelas="KELAS 1A"
+node src/scripts/dummy.js --ya --telepon=628123456789   # buat ngetes notif WA
+```
+
+Yang dihapus: absensi, notifikasi_log, sesi_absensi, siswa, sync_log.
+Yang dipertahankan: sekolah, users (admin/guru), pengaturan.
+
 
 ---
 

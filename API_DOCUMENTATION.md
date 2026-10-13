@@ -1346,7 +1346,78 @@ POST /api/sync/dapodik
 | `pengguna` | Bikin akun guru/kepsek dari Dapodik |
 | `rombongan_belajar` | Set wali kelas dari rombel |
 
-**Response (langsung balik):**
+**Filter opsional (buat narik sebagian aja):**
+
+| Field | Isi | Contoh |
+|-------|-----|--------|
+| `kelas` | Nama rombel, boleh lebih dari satu | `"KELAS 1A"`, `"kelas 2a, KELAS 2B"`, `["KELAS 1A","KELAS 1B"]` |
+| `tingkat` | `tingkat_pendidikan_id` | `"6"` (artinya kelas 6A + 6B), `["1","2"]` |
+
+Dua-duanya kosong = tarik semua (perilaku lama). Ga peka huruf besar-kecil dan
+spasi berlebih. Siswa yang sudah ada di-update, yang belum ditambah (aman diulang).
+
+```json
+{ "tipe": "peserta_didik", "kelas": "KELAS 1A" }
+{ "tipe": "peserta_didik", "tingkat": "6" }
+```
+
+**Response:**
+
+```json
+{
+  "results": 1,
+  "id": "sync_id",
+  "start": 0,
+  "limit": 1,
+  "rows": {
+    "sync_id": "09554467-...",
+    "status": "berhasil",
+    "filter_dipakai": { "kelas": ["KELAS 1A"], "tingkat": [] },
+    "peserta_didik": {
+      "baru": 27,
+      "update": 0,
+      "gagal": 0,
+      "total": 27,
+      "total_di_dapodik": 302,
+      "daftar_gagal": []
+    },
+    "waktu_mulai": "2026-10-13T05:16:25.384Z",
+    "waktu_selesai": "2026-10-13T05:16:30.025Z"
+  }
+}
+```
+
+`daftar_gagal` berisi siswa yang gagal masuk beserta alasannya (maks. 20 baris),
+jadi kalau ada yang gagal kelihatan -- bukan cuma angka.
+
+**Catatan NISN:** kalau Dapodik mengirim `nisn` kosong (siswa baru yang NISN-nya
+belum terbit), backend pakai NIPD dulu; kalau NIPD juga kosong, dipakai
+`DAPODIK-<peserta_didik_id>`. Jadi siswanya tetap masuk, ga ada yang di-skip.
+
+### Lihat daftar kelas di Dapodik
+
+```
+GET /api/sync/dapodik/kelas-dapodik
+```
+
+**Header:** `Authorization: Bearer {token}` (Admin)
+
+Balikin daftar rombel yang ada di Dapodik, lengkap dengan jumlah siswa di Dapodik
+dan yang sudah masuk DB. Berguna buat nentuin nilai `kelas` sebelum sync.
+
+```json
+{
+  "results": 12,
+  "id": "nama_rombel",
+  "start": 0,
+  "limit": 20,
+  "rows": [
+    { "nama_rombel": "KELAS 1A", "jumlah_dapodik": 27, "jumlah_di_db": 27 }
+  ]
+}
+```
+
+**Response (sync tipe `all`):**
 
 ```json
 {
