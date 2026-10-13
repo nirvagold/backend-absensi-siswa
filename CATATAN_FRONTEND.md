@@ -448,19 +448,30 @@ GET /api/notifikasi/setting
 
 ```json
 {
-  "success": true,
-  "data": {
+  "results": 1,
+  "id": "wa_otomatis",
+  "start": 0,
+  "limit": 1,
+  "rows": {
     "wa_otomatis": true,
-    "pilihan": { "otomatis": true, "manual": false },
+    "pilihan": {
+      "otomatis": "WA langsung dikirim ke wali setiap absen Hadir/Terlambat",
+      "manual": "WA tidak dikirim otomatis — admin kirim sendiri dari Riwayat"
+    },
     "dari_env": false
   }
 }
 ```
 
+Perhatiin: response-nya **gaya Dapodik** (`rows`), sama kayak endpoint lain — bukan
+`{ success, data }`. Isinya di `rows`, bukan `data`.
+
+`pilihan` cuma **teks bantuan** buat label toggle, bukan nilai boolean.
+
 `dari_env: true` artinya admin belum pernah nge-set dari UI, jadi yang dipakai masih
 nilai awal dari env. Cocok buat nampilin badge "belum diatur".
 
-**Ubah setting** (Admin & Kepala Sekolah):
+**Ubah setting** (Admin saja — `PUT` dan `GET` dua-duanya `adminAuth`):
 
 ```
 PUT /api/notifikasi/setting
@@ -476,9 +487,10 @@ atau versi yang lebih enak dibaca dari toggle UI:
 { "mode": "manual" }
 ```
 
-`mode` isinya `"otomatis"` atau `"manual"`. Response balikannya sama kayak GET.
-Kalau body-nya kosong / nilainya ngawur → **400 VALIDATION_ERROR**. Harus salah satu,
-jangan kirim dua-duanya.
+Response `PUT` juga gaya Dapodik: `rows: { "wa_otomatis": false, "dari_env": false }`.
+
+`mode` isinya `"otomatis"` atau `"manual"`. Kalau body-nya kosong / nilainya ngawur →
+**400 VALIDATION_ERROR**. Pilih salah satu bentuk, jangan kirim dua-duanya.
 
 **Saran UI:** toggle di halaman Pengaturan —
 *"Kirim WA otomatis setelah absen"* → on = `otomatis`, off = `manual`.
