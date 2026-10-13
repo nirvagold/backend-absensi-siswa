@@ -82,8 +82,8 @@ Prisma      -- ORM, ga nulis SQL manual
 PostgreSQL  -- database beneran (Neon free tier)
 JWT         -- login
 bcryptjs    -- hash password
-qrcode      -- generate QR (belum kepake)
-pdf-lib     -- buat PDF kartu (belum kepake)
+qrcode      -- generate QR kartu siswa
+pdf-lib     -- buat PDF kartu pelajar
 axios       -- ngambil data dari Dapodik
 Vercel      -- hosting gratisan
 ```
@@ -113,6 +113,7 @@ src/
   utils/
     response.js         helper format dapodik
     waktu.js            util zona waktu WIB (UTC-safe)
+    kartu.js            render kartu pelajar PDF (tema ilustrasi)
   prisma/
     schema.prisma       schema database
     seed.js             data awal (admin+guru)

@@ -543,14 +543,18 @@ GET /api/siswa/:peserta_didik_id/kartu-qr
 
 | Komponen | Detail |
 |----------|--------|
-| Ukuran | 85.6 x 54 mm (CR-80) |
+| Ukuran | 85.6 x 54 mm (CR-80) — 612 x 378 pt |
 | Orientasi | Landscape |
-| Header | Nama sekolah |
-| Nama siswa | Font bold 14pt |
-| NISN | Nomor induk |
-| Kelas | Nama rombel |
-| QR Code | 25x25mm, berisi peserta_didik_id |
-| Tahun ajaran | Footer |
+| Tema | Ilustrasi ceria: langit biru, matahari, awan, bukit berlapis, pohon pinus, dan rumah beratap merah |
+| Papan nama | Nama sekolah + kecamatan/kabupaten |
+| Badge | "KARTU PELAJAR" (merah) |
+| Nama siswa | Bold, otomatis mengecil kalau kepanjangan (maks. lebar 400 pt) |
+| Data | NISN, NIPD, dan kelas dalam 3 kolom |
+| QR Code | 100x100 pt, berisi `peserta_didik_id`, error correction level M |
+| Footer | "Tahun Ajaran YYYY/YYYY · Wajib dibawa saat absensi QR" |
+
+Renderernya ada di `src/utils/kartu.js` (`buatKartu(siswa, sekolah)`) dan dipakai
+bareng oleh endpoint single maupun bulk.
 
 **Cara download:**
 
