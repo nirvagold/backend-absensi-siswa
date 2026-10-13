@@ -1,34 +1,34 @@
-// ── Alfa otomatis ──
+// ── Alpha otomatis ──
 // Aturan: siswa yang BELUM melakukan scan/absen pada suatu tanggal,
-// setelah lewat batas jam masuk (ABSEN_BATAS_MASUK, default jam 9), dianggap Alfa.
+// setelah lewat batas jam masuk (ABSEN_BATAS_MASUK, default jam 9), dianggap Alpha.
 //
-// Implementasi: status di-set "Tidak Hadir" + keterangan "Alfa" di DB (nyata),
-// mengikuti keputusan: Alfa = Tidak Hadir + keterangan Alfa.
+// Implementasi: status di-set "Tidak Hadir" + keterangan "Alpha" di DB (nyata),
+// mengikuti keputusan: Alpha = Tidak Hadir + keterangan Alpha.
 // Idempoten: siswa yang sudah punya catatan absen hari itu TIDAK di-overwrite.
 //
-// "Nanti bisa di edit" = catatan Alfa bisa diubah jadi Izin/Sakit lewat
+// "Nanti bisa di edit" = catatan Alpha bisa diubah jadi Izin/Sakit lewat
 // endpoint update absensi (ubah kolom keterangan pada record yang sama).
 
 const prisma = require("../config/prisma");
 const { rentangHariWIB, waktuDariJamWIB } = require("../utils/waktu");
-const { getBatasAlfa } = require("../config/absensi");
+const { getBatasAlpha } = require("../config/absensi");
 
 // Ambil semua sekolah (dipakai cron & scheduler)
 async function ambilSekolah() {
   return prisma.sekolah.findMany({ select: { sekolah_id: true } });
 }
 
-// Jam alfa otomatis dalam menit sejak 00:00 WIB.
-// Sumbernya env ABSEN_BATAS_ALFA (default 08:00 = 480), dijaga di config/absensi.js
+// Jam alpha otomatis dalam menit sejak 00:00 WIB.
+// Sumbernya env ABSEN_BATAS_ALPHA (default 08:00 = 480), dijaga di config/absensi.js
 // biar satu tempat sama aturan jam yang lain.
 function batasMasukMenit() {
-  return getBatasAlfa();
+  return getBatasAlpha();
 }
 
 // Tandai semua siswa aktif (belum absen) milik sebuah sekolah pada tanggal
-// `tgl` sebagai "Tidak Hadir" + keterangan "Alfa".
+// `tgl` sebagai "Tidak Hadir" + keterangan "Alpha".
 // Return: { sekolah_id, sekolah_nama, total_siswa, ditandai, sudah_absen }
-async function tandaiAlfaSekolah(sekolahId, tgl) {
+async function tandaiAlphaSekolah(sekolahId, tgl) {
   const sekolah = await prisma.sekolah.findUnique({
     where: { sekolah_id: sekolahId },
     select: { npsn: true, nama: true },
@@ -51,21 +51,21 @@ async function tandaiAlfaSekolah(sekolahId, tgl) {
   const belumAbsen = siswaList.filter((s) => !existingIds.has(s.peserta_didik_id));
 
   // Kolom absensi.petugas_id NOT NULL; cari user admin sekolah sebagai "petugas sistem".
-  // (Alfa dibuat otomatis tanpa operator manusia, jadi pakai admin sekolah.)
+  // (Alpha dibuat otomatis tanpa operator manusia, jadi pakai admin sekolah.)
   const petugasSistem = await prisma.users.findFirst({
     where: { sekolah_id: sekolahId, peran_id_str: "Admin", is_active: true },
     select: { pengguna_id: true },
   });
   const petugasId = petugasSistem?.pengguna_id;
   if (!petugasId) {
-    console.error("[alfa] Tidak ada user Admin untuk sekolah", sekolahId, "- alfa dibatalkan utk sekolah ini");
+    console.error("[alpha] Tidak ada user Admin untuk sekolah", sekolahId, "- alpha dibatalkan utk sekolah ini");
     return {
       sekolah_id: sekolahId,
       sekolah_nama: sekolah?.nama || sekolah?.npsn || null,
       total_siswa: siswaList.length,
       sudah_absen: existing.length,
       ditandai: 0,
-      alfa_dibatalkan: true,
+      alpha_dibatalkan: true,
     };
   }
 
@@ -77,11 +77,11 @@ async function tandaiAlfaSekolah(sekolahId, tgl) {
           peserta_didik_id: s.peserta_didik_id,
           sekolah_id: sekolahId,
           tanggal: awalHari,
-          // Jam alfa (default 08:00 WIB), bukan tengah malam -- biar di riwayat
+          // Jam alpha (default 08:00 WIB), bukan tengah malam -- biar di riwayat
           // jamnya masuk akal dan konsisten sama jam WIB yang lain.
           waktu_absen: waktuDariJamWIB(awalHari, batasMasukMenit()),
           status: "Tidak Hadir",
-          keterangan: "Alfa",
+          keterangan: "Alpha",
           metode: "sistem",
           petugas_id: petugasId,
         },
@@ -89,7 +89,7 @@ async function tandaiAlfaSekolah(sekolahId, tgl) {
       ditandai++;
     } catch (e) {
       if (e.code === "P2002") continue; // data race, sudah ada baris lain — lewati
-      console.error("Gagal tandai alfa siswa", s.peserta_didik_id, e.message);
+      console.error("Gagal tandai alpha siswa", s.peserta_didik_id, e.message);
     }
   }
 
@@ -104,19 +104,19 @@ async function tandaiAlfaSekolah(sekolahId, tgl) {
 
 // Jalankan untuk semua sekolah pada tanggal `tgl` (default hari ini).
 // Return agregat.
-async function tandaiAlfaSemuaSekolah(tgl = new Date()) {
+async function tandaiAlphaSemuaSekolah(tgl = new Date()) {
   const sekolahList = await ambilSekolah();
   const hasil = [];
   for (const sk of sekolahList) {
-    hasil.push(await tandaiAlfaSekolah(sk.sekolah_id, tgl));
+    hasil.push(await tandaiAlphaSekolah(sk.sekolah_id, tgl));
   }
   const totalDitandai = hasil.reduce((a, b) => a + b.ditandai, 0);
-  return { hasil, total_sekolah: hasil.length, total_ditandai_alfa: totalDitandai };
+  return { hasil, total_sekolah: hasil.length, total_ditandai_alpha: totalDitandai };
 }
 
 module.exports = {
   ambilSekolah,
-  tandaiAlfaSekolah,
-  tandaiAlfaSemuaSekolah,
+  tandaiAlphaSekolah,
+  tandaiAlphaSemuaSekolah,
   batasMasukMenit,
 };

@@ -4,13 +4,13 @@
 //   06:00 - 07:00  scan masuk  -> status "Hadir"
 //   07:00 - 08:00  scan masuk  -> status "Terlambat"
 //   08:00 dst.     jam absen tutup; siswa yang belum absen dihitung
-//                  "Tidak Hadir" + keterangan "Alfa" (alfa otomatis)
+//                  "Tidak Hadir" + keterangan "Alpha" (alpha otomatis)
 //
 // Jamnya diatur lewat env:
 //   ABSEN_JAM_MULAI   (default "06:00") -- sebelum ini scan ditolak
 //   ABSEN_BATAS_MASUK (default "07:00") -- batas Hadir vs Terlambat
 //   ABSEN_JAM_SELESAI (default "08:00") -- setelah ini scan ditolak
-//   ABSEN_BATAS_ALFA  (default "08:00") -- jam alfa otomatis jalan
+//   ABSEN_BATAS_ALPHA  (default "08:00") -- jam alpha otomatis jalan
 //
 // Semua perbandingan jam pakai WIB (UTC+7) lewat utils/waktu, bukan jam server,
 // supaya hasilnya sama di Vercel (UTC) maupun lokal (WIB).
@@ -22,12 +22,12 @@ const DEFAULT_JAM = {
   mulai: "06:00",
   batasMasuk: "07:00",
   selesai: "08:00",
-  batasAlfa: "08:00",
+  batasAlpha: "08:00",
 };
 
 // Status & keterangan yang diterima API.
 const STATUS_VALID = ["Hadir", "Terlambat", "Izin", "Sakit", "Tidak Hadir"];
-const KETERANGAN_VALID = ["Izin", "Sakit", "Alfa"];
+const KETERANGAN_VALID = ["Izin", "Sakit", "Alpha"];
 // Status lama yang masih diterima (data & frontend versi sebelumnya).
 const STATUS_LEGACY = ["Izin", "Sakit"];
 
@@ -62,12 +62,12 @@ function getBatasMasuk() {
   return menitEnv("ABSEN_BATAS_MASUK", DEFAULT_JAM.batasMasuk);
 }
 
-// Jam alfa otomatis (siswa yang belum scan dianggap tidak hadir).
-function getBatasAlfa() {
-  return menitEnv("ABSEN_BATAS_ALFA", DEFAULT_JAM.batasAlfa);
+// Jam alpha otomatis (siswa yang belum scan dianggap tidak hadir).
+function getBatasAlpha() {
+  return menitEnv("ABSEN_BATAS_ALPHA", DEFAULT_JAM.batasAlpha);
 }
 
-// Lama dipakai cron/scheduler lama; sekarang ikut jam alfa.
+// Lama dipakai cron/scheduler lama; sekarang ikut jam alpha.
 function getBatasSesi() {
   return parseJam(process.env.ABSEN_BATAS_SESI);
 }
@@ -91,8 +91,8 @@ function jamBatasMasuk() {
   return menitKeJam(getBatasMasuk() ?? parseJam(DEFAULT_JAM.batasMasuk));
 }
 
-function jamBatasAlfa() {
-  return menitKeJam(getBatasAlfa() ?? parseJam(DEFAULT_JAM.batasAlfa));
+function jamBatasAlpha() {
+  return menitKeJam(getBatasAlpha() ?? parseJam(DEFAULT_JAM.batasAlpha));
 }
 
 // Ubah jam Date jadi menit sejak 00:00 WIB.
@@ -111,7 +111,7 @@ function cekJamOperasional(date) {
   if (mulai !== null && menit < mulai) {
     return { valid: false, alasan: "sebelum jam absen dibuka" };
   }
-  // Tepat di jam tutup sudah dianggap lewat (jam 08:00 -> alfa, bukan terlambat).
+  // Tepat di jam tutup sudah dianggap lewat (jam 08:00 -> alpha, bukan terlambat).
   if (selesai !== null && menit >= selesai) {
     return { valid: false, alasan: "sudah lewat jam absen" };
   }
@@ -140,18 +140,17 @@ function lewatBatasSesi(date) {
   return menitDariTanggal(date) > batasSesi;
 }
 
-// Terima "Alfa" dari ejaan apa pun: "alfa", "Alfa", "alpha", "Alpha".
-// Kembalikan null kalau bukan Izin/Sakit/Alfa.
+// Terima "Alpha" dari ejaan apa pun: "alpha", "ALPHA", "Alpha".
+// Kembalikan null kalau bukan Izin/Sakit/Alpha.
 function normalkanKeterangan(value) {
   if (!value) return null;
   const v = String(value).trim();
   if (!v) return null;
-  if (v.toLowerCase() === "alpha") return "Alfa"; // ejaan Inggris (UI lama)
   const ketemu = KETERANGAN_VALID.find((k) => k.toLowerCase() === v.toLowerCase());
   return ketemu || null;
 }
 
-// "Tidak Hadir" + "Alfa" -> "Tidak Hadir (Alfa)". Dipakai buat label di riwayat.
+// "Tidak Hadir" + "Alpha" -> "Tidak Hadir (Alpha)". Dipakai buat label di riwayat.
 function labelStatus(status, keterangan) {
   if (!status) return null;
   if (status === "Tidak Hadir" && keterangan) return `${status} (${keterangan})`;
@@ -167,13 +166,13 @@ module.exports = {
   getJamMulai,
   getJamSelesai,
   getBatasMasuk,
-  getBatasAlfa,
+  getBatasAlpha,
   getBatasSesi,
   cekJamOperasional,
   jamBuka,
   jamTutup,
   jamBatasMasuk,
-  jamBatasAlfa,
+  jamBatasAlpha,
   menitKeJam,
   menitDariTanggal,
   statusDariJam,

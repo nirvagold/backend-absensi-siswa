@@ -47,16 +47,16 @@ npm start
 - Scan QR absen (peserta_didik_id) + cegah double absen
 - Jam absensi bertingkat: 06:00-07:00 Hadir, 07:00-08:00 Terlambat, 08:00 dst. ditolak (`ABSEN_JAM_MULAI` / `ABSEN_BATAS_MASUK` / `ABSEN_JAM_SELESAI`)
 - Status scan otomatis: lewat batas jam masuk -> "Terlambat" (batas diatur via env)
-- Absen manual (Hadir/Terlambat/Tidak Hadir, plus Izin/Sakit gaya lama) + keterangan Izin/Sakit/Alfa
-- Alfa otomatis: siswa belum absen setelah jam alfa -> "Tidak Hadir" + keterangan "Alfa" (Vercel Cron / scheduler in-proses)
-- Siswa telat datang: scan menimpa catatan alfa otomatis jadi "Terlambat"
-- Edit absensi (ubah status/keterangan) -- mis. alfa diubah jadi izin
+- Absen manual (Hadir/Terlambat/Tidak Hadir, plus Izin/Sakit gaya lama) + keterangan Izin/Sakit/Alpha
+- Alpha otomatis: siswa belum absen setelah jam alpha -> "Tidak Hadir" + keterangan "Alpha" (Vercel Cron / scheduler in-proses)
+- Siswa telat datang: scan menimpa catatan alpha otomatis jadi "Terlambat"
+- Edit absensi (ubah status/keterangan) -- mis. alpha diubah jadi izin
 - Riwayat absensi (filter tanggal, kelas, status, keterangan, search nama/NISN)
 - Riwayat per siswa
-- Dashboard ringkasan hari ini (hadir/terlambat/izin/sakit/alfa + belum absen)
+- Dashboard ringkasan hari ini (hadir/terlambat/izin/sakit/alpha + belum absen)
 - Dashboard tren 7 hari
 - Dashboard per-kelas (12 kelas)
-- Flagging siswa bermasalah (alfa >= 3)
+- Flagging siswa bermasalah (alpha >= 3)
 - Export CSV
 - CI workflow
 - Seed data (admin+guru)
@@ -104,12 +104,12 @@ src/
     sync.js             sync dari dapodik
     dashboard.js        ringkasan
     notifikasi.js       kirim wa (fonnte) + log + setting otomatis/manual
-    cron.js             cron alfa otomatis (dipicu Vercel Cron)
+    cron.js             cron alpha otomatis (dipicu Vercel Cron)
   config/
-    absensi.js          aturan jam: buka, batas Hadir/Terlambat, tutup, jam alfa
+    absensi.js          aturan jam: buka, batas Hadir/Terlambat, tutup, jam alpha
     pengaturan.js       setelan per sekolah di DB (mis. mode WA)
   scripts/
-    alfa.js             tandai alfa otomatis (siswa belum absen)
+    alpha.js             tandai alpha otomatis (siswa belum absen)
   utils/
     response.js         helper format dapodik
     waktu.js            util zona waktu WIB (UTC-safe)
@@ -158,10 +158,10 @@ Lihat `.env.example` untuk daftar lengkap. Yang penting untuk fitur absensi & WA
 | `WA_KIRIM_OTOMATIS` | Nilai **awal** WA otomatis. Admin bisa ganti kapan saja dari UI (`PUT /api/notifikasi/setting`) -- begitu diubah, yang dipakai nilai di DB. | `"true"` |
 | `ABSEN_JAM_MULAI` | Jam buka absen WIB (`"HH:MM"`). Scan sebelum ini ditolak. | `"06:00"` |
 | `ABSEN_BATAS_MASUK` | Batas Hadir vs Terlambat (`"HH:MM"`). Scan lewat jam ini -> "Terlambat". | `"07:00"` |
-| `ABSEN_JAM_SELESAI` | Jam tutup absen (`"HH:MM"`). Scan setelah (dan tepat) jam ini ditolak -> masuk alfa. | `"08:00"` |
-| `ABSEN_BATAS_ALFA` | Jam jalan cron alfa otomatis (`"HH:MM"`). | `"08:00"` |
-| `CRON_SECRET` | Secret buat endpoint `/api/cron/alfa`. **Wajib diset** di Vercel. | (kosong) |
-| `JADWAL_JOBS` | `"false"` = matikan scheduler alfa in-proses (dipakai di Vercel, karena ada Vercel Cron). | (aktif) |
+| `ABSEN_JAM_SELESAI` | Jam tutup absen (`"HH:MM"`). Scan setelah (dan tepat) jam ini ditolak -> masuk alpha. | `"08:00"` |
+| `ABSEN_BATAS_ALPHA` | Jam jalan cron alpha otomatis (`"HH:MM"`). | `"08:00"` |
+| `CRON_SECRET` | Secret buat endpoint `/api/cron/alpha`. **Wajib diset** di Vercel. | (kosong) |
+| `JADWAL_JOBS` | `"false"` = matikan scheduler alpha in-proses (dipakai di Vercel, karena ada Vercel Cron). | (aktif) |
 
 ### Jam absen & status
 
@@ -172,23 +172,23 @@ Empat pengaturan jam yang beda fungsinya:
 | sebelum `ABSEN_JAM_MULAI` (06:00) | **ditolak** `400 OUTSIDE_ABSEN_HOURS` |
 | `ABSEN_JAM_MULAI` - `ABSEN_BATAS_MASUK` (06:00-07:00) | **"Hadir"** |
 | `ABSEN_BATAS_MASUK` - `ABSEN_JAM_SELESAI` (07:00-08:00) | **"Terlambat"** |
-| sejak `ABSEN_JAM_SELESAI` (08:00 dst.) | **ditolak** `400 OUTSIDE_ABSEN_HOURS` -> siswa ditandai alfa |
+| sejak `ABSEN_JAM_SELESAI` (08:00 dst.) | **ditolak** `400 OUTSIDE_ABSEN_HOURS` -> siswa ditandai alpha |
 
 Batasnya inklusif di atas: tepat jam 07:00 sudah "Terlambat", tepat jam 08:00 sudah tutup.
-`ABSEN_BATAS_ALFA` (jam cron alfa) default-nya sama dengan `ABSEN_JAM_SELESAI`, jadi begitu
-pintu absen tutup, siswa yang belum scan langsung ditandai alfa.
+`ABSEN_BATAS_ALPHA` (jam cron alpha) default-nya sama dengan `ABSEN_JAM_SELESAI`, jadi begitu
+pintu absen tutup, siswa yang belum scan langsung ditandai alpha.
 
-Siswa yang datang setelah ditandai alfa otomatis lalu scan sendiri: catatan alfa
+Siswa yang datang setelah ditandai alpha otomatis lalu scan sendiri: catatan alpha
 (metode `sistem`) ditimpa jadi "Terlambat" + WA otomatis terkirim. Catatan hasil scan
 atau input manual tetap tidak bisa ditimpa (balas `409 ALREADY_ABSENT`).
 
-### Alfa otomatis
+### Alpha otomatis
 
-- **Vercel**: Vercel Cron di `vercel.json` (`0 1 * * *` UTC = **08:00 WIB**) memanggil `/api/cron/alfa`.
-- **Railway/long-running**: scheduler in-proses di `src/index.js` jalan otomatis (cek tiap menit, eksekusi sekali sehari setelah jam `ABSEN_BATAS_ALFA` WIB).
-- Hasil: siswa yang belum absen -> baris `status: "Tidak Hadir"`, `keterangan: "Alfa"`, `metode: "sistem"`.
+- **Vercel**: Vercel Cron di `vercel.json` (`0 1 * * *` UTC = **08:00 WIB**) memanggil `/api/cron/alpha`.
+- **Railway/long-running**: scheduler in-proses di `src/index.js` jalan otomatis (cek tiap menit, eksekusi sekali sehari setelah jam `ABSEN_BATAS_ALPHA` WIB).
+- Hasil: siswa yang belum absen -> baris `status: "Tidak Hadir"`, `keterangan: "Alpha"`, `metode: "sistem"`.
 - Bisa diedit jadi Izin/Sakit lewat `PUT /api/absensi/:id`.
-- Jalankan manual: `GET /api/cron/alfa?tanggal=YYYY-MM-DD` dengan header `Authorization: Bearer <CRON_SECRET>`.
+- Jalankan manual: `GET /api/cron/alpha?tanggal=YYYY-MM-DD` dengan header `Authorization: Bearer <CRON_SECRET>`.
 
 ### Zona waktu
 

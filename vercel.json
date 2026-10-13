@@ -10,7 +10,7 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/alfa",
+      "path": "/api/cron/alpha",
       "schedule": "0 1 * * *"
     }
   ]

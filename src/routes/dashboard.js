@@ -43,14 +43,14 @@ router.get("/ringkasan", auth, async (req, res) => {
     const sakit =
       absensi.filter((a) => a.status === "Sakit").length +
       absensi.filter((a) => a.status === "Tidak Hadir" && a.keterangan === "Sakit").length;
-    const alfa = absensi.filter((a) => a.status === "Tidak Hadir" && a.keterangan === "Alfa").length;
+    const alpha = absensi.filter((a) => a.status === "Tidak Hadir" && a.keterangan === "Alpha").length;
 
-    // Semua alasan ketidakhadiran (izin + sakit + alfa) -- angka "tidak hadir" yang
+    // Semua alasan ketidakhadiran (izin + sakit + alpha) -- angka "tidak hadir" yang
     // dipakai di kartu dashboard, biar konsisten sama ringkasan riwayat.
-    const total_tidak_hadir = izin + sakit + alfa;
+    const total_tidak_hadir = izin + sakit + alpha;
     // Siswa yang sudah tercatat hadir/terlambat hari ini.
     const sudah_absen = hadir + terlambat;
-    // Siswa yang belum punya catatan apa pun (belum scan, belum ditandai alfa).
+    // Siswa yang belum punya catatan apa pun (belum scan, belum ditandai alpha).
     const belum_absen = Math.max(0, total_siswa - sudah_absen - total_tidak_hadir);
 
     const data = {
@@ -60,14 +60,14 @@ router.get("/ringkasan", auth, async (req, res) => {
       terlambat,
       izin,
       sakit,
-      alfa,
-      // alias: DashboardView baca `dashboard.alpha` (ejaan Inggris).
-      alpha: alfa,
-      // `tidak_hadir` = baris berstatus "Tidak Hadir" (izin/sakit/alfa bentuk baru),
+      alpha,
+      // alias lama: klien yang sudah telanjur baca `alfa` tetap jalan.
+      alfa: alpha,
+      // `tidak_hadir` = baris berstatus "Tidak Hadir" (izin/sakit/alpha bentuk baru),
       // artinya sama persis dengan `tidak_hadir` di ringkasan riwayat & filter status.
       tidak_hadir: absensi.filter((a) => a.status === "Tidak Hadir").length,
       // POINT #5: rincian buat kartu dashboard — berapa hadir, berapa tidak hadir.
-      // `total_tidak_hadir` = SEMUA alasan ketidakhadiran (izin + sakit + alfa),
+      // `total_tidak_hadir` = SEMUA alasan ketidakhadiran (izin + sakit + alpha),
       // termasuk data lama yang statusnya masih "Izin"/"Sakit".
       total_tidak_hadir,
       sudah_absen,
@@ -100,7 +100,7 @@ router.get("/siswa-bermasalah", auth, async (req, res) => {
           peserta_didik_id: s.peserta_didik_id,
           nama: s.nama,
           nama_rombel: s.nama_rombel,
-          total_alfa: totalAbsen,
+          total_alpha: totalAbsen,
         });
       }
     }

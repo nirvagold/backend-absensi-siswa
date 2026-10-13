@@ -8,7 +8,7 @@ const {
   jamBuka,
   jamTutup,
   jamBatasMasuk,
-  jamBatasAlfa,
+  jamBatasAlpha,
   normalkanKeterangan,
   labelStatus,
   STATUS_VALID,
@@ -43,7 +43,7 @@ router.post("/scan", guruAuth, async (req, res) => {
     if (!jamOp.valid) {
       return res.status(400).json({
         success: false,
-        message: `Absen ditolak: ${jamOp.alasan}. Jam absen dibuka ${jamBuka()} - ${jamTutup()} WIB (Hadir sampai ${jamBatasMasuk()}, alfa otomatis ${jamBatasAlfa()})`,
+        message: `Absen ditolak: ${jamOp.alasan}. Jam absen dibuka ${jamBuka()} - ${jamTutup()} WIB (Hadir sampai ${jamBatasMasuk()}, alpha otomatis ${jamBatasAlpha()})`,
         error_code: "OUTSIDE_ABSEN_HOURS",
         data: {
           waktu_scan: wallTime.toISOString(),
@@ -65,13 +65,13 @@ router.post("/scan", guruAuth, async (req, res) => {
       },
     });
 
-    // Alfa otomatis (metode "sistem" + keterangan "Alfa") BUKAN catatan manual --
+    // Alpha otomatis (metode "sistem" + keterangan "Alpha") BUKAN catatan manual --
     // kalau siswa ternyata datang dan scan, catatan itu ditimpa jadi "Terlambat".
     // Catatan hasil scan / input manual tetap tidak bisa ditimpa (poin di bawah).
-    const alfaOtomatis =
-      existing && existing.metode === "sistem" && existing.keterangan === "Alfa";
+    const alphaOtomatis =
+      existing && existing.metode === "sistem" && existing.keterangan === "Alpha";
 
-    if (existing && !alfaOtomatis) {
+    if (existing && !alphaOtomatis) {
       return res.status(409).json({
         success: false,
         message: `Siswa sudah absen hari ini pukul ${jamStrWIB(existing.waktu_absen)} WIB`,
@@ -84,14 +84,14 @@ router.post("/scan", guruAuth, async (req, res) => {
     // Scan selalu berarti siswa hadir, paling jauh dianggap "Terlambat".
     const statusScan = statusDariJam(wallTime) || "Hadir";
 
-    const absen = alfaOtomatis
+    const absen = alphaOtomatis
       ? await prisma.absensi.update({
           where: { absensi_id: existing.absensi_id },
           data: {
             waktu_absen: wallTime,
             status: statusScan,
             metode: "scan",
-            keterangan: null, // buang keterangan "Alfa"
+            keterangan: null, // buang keterangan "Alpha"
             sesi_id: sesi_id || null,
             petugas_id: req.user.pengguna_id,
           },
@@ -124,7 +124,7 @@ router.post("/scan", guruAuth, async (req, res) => {
       keterangan: absen.keterangan || null,
       metode: absen.metode || "scan",
     };
-    if (alfaOtomatis) hasil.diubah_dari_alfa = true;
+    if (alphaOtomatis) hasil.diubah_dari_alpha = true;
 
     // Kirim WA otomatis hanya jika setelannya menyalakan (POINT #1),
     // dan hanya untuk status kehadiran yang butuh info ortu (Hadir/Terlambat).
@@ -161,8 +161,8 @@ router.post("/manual", guruAuth, async (req, res) => {
       return res.status(400).json(errorResponse("Status tidak valid", "VALIDATION_ERROR"));
     }
 
-    // POINT #4: "Tidak Hadir" wajib keterangan Izin/Sakit/Alfa
-    // ("alpha"/"Alpha" diterima juga, disimpan sebagai "Alfa").
+    // POINT #4: "Tidak Hadir" wajib keterangan Izin/Sakit/Alpha
+    // ("alpha"/"Alpha" diterima juga, disimpan sebagai "Alpha").
     //
     // Status lain (Hadir/Terlambat/Izin/Sakit) keterangannya bebas -- di produksi
     // dipakai buat catatan kaya "flu", "Demam", "Menghadiri pernikahan kakak".
@@ -171,7 +171,7 @@ router.post("/manual", guruAuth, async (req, res) => {
     const keterangan =
       status === "Tidak Hadir" ? normalkanKeterangan(keteranganMentah) : (keteranganMentah || null);
     if (status === "Tidak Hadir" && !keterangan) {
-      return res.status(400).json(errorResponse("Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alfa", "VALIDATION_ERROR"));
+      return res.status(400).json(errorResponse("Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alpha", "VALIDATION_ERROR"));
     }
 
     // Validasi siswa ada
@@ -210,7 +210,7 @@ router.post("/manual", guruAuth, async (req, res) => {
     });
 
     // Kirim WA otomatis ke ortu (POINT #1) HANYA untuk status kehadiran
-    // (Hadir/Terlambat). Izin/Sakit/Tidak Hadir/Alfa tidak auto-kirim --
+    // (Hadir/Terlambat). Izin/Sakit/Tidak Hadir/Alpha tidak auto-kirim --
     // admin bisa kirim manual lewat POST /api/notifikasi/kirim/:absensi_id.
     if (siswaAda.nomor_telepon_seluler && ["Hadir", "Terlambat"].includes(status)) {
       const siswaPayload = { nama: siswaAda.nama };
@@ -277,7 +277,7 @@ router.get("/hari-ini", auth, async (req, res) => {
       tanggal: tanggalStrWIB(today),
       waktu_absen: a.waktu_absen.toISOString(),
       jam_absen: jamStrWIB(a.waktu_absen),
-      // POINT #6: `label_status` = "Tidak Hadir (Alfa)" dsb, biar keterangan
+      // POINT #6: `label_status` = "Tidak Hadir (Alpha)" dsb, biar keterangan
       // langsung kebaca tanpa frontend nyusun sendiri.
       status: a.status,
       keterangan: a.keterangan,
@@ -311,7 +311,7 @@ router.get("/", auth, async (req, res) => {
     }
     if (req.query.kelas) where.siswa = { nama_rombel: req.query.kelas };
     if (req.query.status) where.status = req.query.status;
-    // Filter keterangan (Izin/Sakit/Alfa) — dipakai buat misahin "Tidak Hadir"
+    // Filter keterangan (Izin/Sakit/Alpha) — dipakai buat misahin "Tidak Hadir"
     if (req.query.keterangan) where.keterangan = req.query.keterangan;
     // Search nama / NISN (gabung pakai AND biar ga nabrak filter siswa di atas)
     const search = (req.query.search || "").trim();
@@ -355,7 +355,7 @@ router.get("/", auth, async (req, res) => {
       tanggal: tanggalStrWIB(a.tanggal),
       waktu_absen: a.waktu_absen.toISOString(),
       jam_absen: jamStrWIB(a.waktu_absen),
-      // POINT #6: label siap tampil ("Tidak Hadir (Alfa)", "Terlambat", ...).
+      // POINT #6: label siap tampil ("Tidak Hadir (Alpha)", "Terlambat", ...).
       status: a.status,
       keterangan: a.keterangan,
       label_status: labelStatus(a.status, a.keterangan),
@@ -374,7 +374,7 @@ router.get("/", auth, async (req, res) => {
       izin: hitung("Izin") + ket("Izin"),
       sakit: hitung("Sakit") + ket("Sakit"),
       tidak_hadir: hitung("Tidak Hadir"),
-      alfa: ket("Alfa"),
+      alpha: ket("Alpha"),
     };
 
     res.json({
@@ -389,7 +389,7 @@ router.get("/", auth, async (req, res) => {
 });
 
 // PUT /api/absensi/:id — ubah status/keterangan absensi.
-// Dipakai untuk "edit alfa jadi izin/sakit" (POINT: alfa bisa diedit).
+// Dipakai untuk "edit alpha jadi izin/sakit" (POINT: alpha bisa diedit).
 router.put("/:id", guruAuth, async (req, res) => {
   try {
     const { status } = req.body;
@@ -420,7 +420,7 @@ router.put("/:id", guruAuth, async (req, res) => {
     const keteranganAkhir = adaKeterangan ? keterangan : absen.keterangan;
 
     if (statusAkhir === "Tidak Hadir" && !keteranganAkhir) {
-      return res.status(400).json(errorResponse("Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alfa", "VALIDATION_ERROR"));
+      return res.status(400).json(errorResponse("Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alpha", "VALIDATION_ERROR"));
     }
 
     const updated = await prisma.absensi.update({

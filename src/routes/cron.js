@@ -7,7 +7,7 @@
 // Untuk testing manual, header `x-cron-secret` juga diterima.
 
 const router = require("express").Router();
-const { tandaiAlfaSemuaSekolah } = require("../scripts/alfa");
+const { tandaiAlphaSemuaSekolah } = require("../scripts/alpha");
 const { errorResponse } = require("../utils/response");
 
 function cekSecret(req, res, next) {
@@ -32,18 +32,18 @@ function cekSecret(req, res, next) {
   next();
 }
 
-// GET /api/cron/alfa?tanggal=YYYY-MM-DD
+// GET /api/cron/alpha?tanggal=YYYY-MM-DD
 // Tandai semua siswa yang belum scan pada tanggal tsb (default hari ini)
-// menjadi "Tidak Hadir" + keterangan "Alfa".
+// menjadi "Tidak Hadir" + keterangan "Alpha".
 // Idempoten: siswa yang sudah bersabsen hari itu tidak di-overwrite.
-router.get("/alfa", cekSecret, async (req, res) => {
+router.get("/alpha", cekSecret, async (req, res) => {
   try {
     const tgl = req.query.tanggal ? new Date(req.query.tanggal) : new Date();
-    const hasil = await tandaiAlfaSemuaSekolah(tgl);
+    const hasil = await tandaiAlphaSemuaSekolah(tgl);
     res.json({ success: true, data: hasil });
   } catch (err) {
-    console.error("Cron alfa error:", err);
-    res.status(500).json(errorResponse("Gagal menjalankan cron alfa", "INTERNAL_ERROR", 500));
+    console.error("Cron alpha error:", err);
+    res.status(500).json(errorResponse("Gagal menjalankan cron alpha", "INTERNAL_ERROR", 500));
   }
 });
 

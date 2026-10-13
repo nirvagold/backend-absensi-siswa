@@ -14,7 +14,7 @@ Base URL: `https://backend-absensi-siswa-mu.vercel.app`
 - [5. Dashboard](#5-dashboard)
 - [6. Sync Dapodik](#6-sync-dapodik)
 - [7. Notifikasi](#7-notifikasi)
-- [8. Cron Alfa Otomatis](#8-cron-alfa-otomatis)
+- [8. Cron Alpha Otomatis](#8-cron-alpha-otomatis)
 - [9. Zona Waktu & Aturan Status](#9-zona-waktu--aturan-status)
 - [10. Error Codes](#10-error-codes)
 - [11. Akun Test](#11-akun-test)
@@ -633,7 +633,7 @@ POST /api/absensi/scan
 6. Backend cek jam scan masih dalam jam operasional absen? (WIB)
    -> kalo di luar: 400 OUTSIDE_ABSEN_HOURS, absen tidak dicatat
 7. Backend cek udah absen apa belum hari ini (batas hari WIB)
-   -> kalo catatannya alfa otomatis (metode "sistem"): ditimpa jadi hasil scan
+   -> kalo catatannya alpha otomatis (metode "sistem"): ditimpa jadi hasil scan
    -> kalo catatan lain (scan/manual): 409
 8. Kalo belum -> hitung status dari jam scan -> catat -> berhasil
 ```
@@ -645,7 +645,7 @@ POST /api/absensi/scan
 | `ABSEN_JAM_MULAI` | Jam absen dibuka — sebelum ini scan **ditolak** (`400`) | `06:00` |
 | `ABSEN_BATAS_MASUK` | **Batas keterlambatan** — lewat jam ini status jadi `Terlambat` | `07:00` |
 | `ABSEN_JAM_SELESAI` | Jam absen tutup — **tepat/selepas** ini scan **ditolak** (`400`) | `08:00` |
-| `ABSEN_BATAS_ALFA` | Jam alfa otomatis — siswa yang belum absen ditandai `Tidak Hadir` + `Alfa` | `08:00` |
+| `ABSEN_BATAS_ALPHA` | Jam alpha otomatis — siswa yang belum absen ditandai `Tidak Hadir` + `Alpha` | `08:00` |
 
 **Status otomatis dari jam scan:**
 
@@ -655,16 +655,16 @@ Status dihitung dari **jam WIB** waktu scan dibandingkan `ABSEN_BATAS_MASUK`:
 |------------------|--------|
 | `< 07:00` | `Hadir` |
 | `07:00` – `< 08:00` | `Terlambat` |
-| `>= 08:00` | **ditolak** `400 OUTSIDE_ABSEN_HOURS` (masuk alfa otomatis) |
+| `>= 08:00` | **ditolak** `400 OUTSIDE_ABSEN_HOURS` (masuk alpha otomatis) |
 
-Ringkasnya: **06–07 Hadir, 07–08 Terlambat, 08+ tidak bisa scan** alias dihitung alfa.
+Ringkasnya: **06–07 Hadir, 07–08 Terlambat, 08+ tidak bisa scan** alias dihitung alpha.
 
 Scan yang berhasil **tidak pernah** otomatis jadi "Tidak Hadir" — paling jauh "Terlambat".
-Status "Tidak Hadir"/Alfa ditentukan oleh alfa otomatis (cron) atau input manual.
+Status "Tidak Hadir"/Alpha ditentukan oleh alpha otomatis (cron) atau input manual.
 
-**Telat datang setelah ditandai alfa:** alfa otomatis (metode `sistem`, keterangan `Alfa`)
+**Telat datang setelah ditandai alpha:** alpha otomatis (metode `sistem`, keterangan `Alpha`)
 **bukan** catatan manual, jadi kalo siswa ternyata datang dan scan, catatan itu ditimpa jadi
-`Terlambat` + WA otomatis terkirim, dan response dapat tambahan `"diubah_dari_alfa": true`.
+`Terlambat` + WA otomatis terkirim, dan response dapat tambahan `"diubah_dari_alpha": true`.
 Catatan hasil scan atau input manual tetap tidak bisa ditimpa (balas `409`).
 
 **WA otomatis:** dikontrol setelan di database (`wa_kirim_otomatis`), yang bisa diubah admin
@@ -700,7 +700,7 @@ secara async. Gagal kirim tidak menggagalkan absensi.
 > **Catatan:** `status` **selalu** ada di response scan. Dulu field ini sempat hilang, jadi
 > kartu "Hasil Absensi" di ScannerView nampilin `-`. `jam_absen` = jam WIB siap tampil
 > (biar gak perlu format timezone di frontend), dan `label_status` = teks siap pakai
-> (`"Tidak Hadir (Alfa)"`). Field `metode` isinya `scan` / `manual` / `sistem`.
+> (`"Tidak Hadir (Alpha)"`). Field `metode` isinya `scan` / `manual` / `sistem`.
 
 **Yang harus ditampilkan di frontend setelah sukses:**
 
@@ -754,7 +754,7 @@ secara async. Gagal kirim tidak menggagalkan absensi.
 ```json
 {
   "success": false,
-  "message": "Absen ditolak: sudah lewat jam absen. Jam absen dibuka 06:00 - 08:00 WIB (Hadir sampai 07:00, alfa otomatis 08:00)",
+  "message": "Absen ditolak: sudah lewat jam absen. Jam absen dibuka 06:00 - 08:00 WIB (Hadir sampai 07:00, alpha otomatis 08:00)",
   "error_code": "OUTSIDE_ABSEN_HOURS",
   "data": {
     "waktu_scan": "2026-10-12T16:50:11.057Z",
@@ -801,7 +801,7 @@ POST /api/absensi/manual
 |-------|-------|------|------------|
 | `peserta_didik_id` | ✅ Ya | string | UUID siswa |
 | `status` | ✅ Ya | string | Salah satu dari tabel di bawah |
-| `keterangan` | ⚠️ Kondisional | string | **Wajib** kalau `status = "Tidak Hadir"` — isinya `Izin`, `Sakit`, atau `Alfa` |
+| `keterangan` | ⚠️ Kondisional | string | **Wajib** kalau `status = "Tidak Hadir"` — isinya `Izin`, `Sakit`, atau `Alpha` |
 
 **Status yang valid:**
 
@@ -809,12 +809,12 @@ POST /api/absensi/manual
 |--------|-------------|------------|
 | `Hadir` | Siswa hadir tapi ga bawa kartu | Opsional (bebas) |
 | `Terlambat` | Datang telat | Opsional (bebas) |
-| `Tidak Hadir` | Ga masuk sekolah | **Wajib**: `Izin` / `Sakit` / `Alfa` |
+| `Tidak Hadir` | Ga masuk sekolah | **Wajib**: `Izin` / `Sakit` / `Alpha` |
 | `Izin` | Ada surat izin | — (legacy, tetap diterima) |
 | `Sakit` | Ada surat dokter / keterangan sakit | — (legacy, tetap diterima) |
 
 > **Catatan:** cara yang dianjurkan sekarang adalah `status: "Tidak Hadir"` + `keterangan`
-> berisi `Izin`/`Sakit`/`Alfa`, biar semua ketidakhadiran konsisten dihitung di dashboard
+> berisi `Izin`/`Sakit`/`Alpha`, biar semua ketidakhadiran konsisten dihitung di dashboard
 > dan flagging siswa bermasalah. Status `Izin`/`Sakit` lama tetap diterima biar data & frontend
 > yang lama ga rusak.
 
@@ -866,7 +866,7 @@ POST /api/absensi/manual
 ```json
 {
   "success": false,
-  "message": "Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alfa",
+  "message": "Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alpha",
   "error_code": "VALIDATION_ERROR"
 }
 ```
@@ -882,7 +882,7 @@ POST /api/absensi/manual
 ```
 
 **WA otomatis:** kalau `WA_KIRIM_OTOMATIS` bukan `"false"`, WA dikirim otomatis **hanya untuk
-status `Hadir` dan `Terlambat`**. Izin/Sakit/Alfa/Tidak Hadir **tidak** auto-kirim —
+status `Hadir` dan `Terlambat`**. Izin/Sakit/Alpha/Tidak Hadir **tidak** auto-kirim —
 admin kirim manual lewat [7.2 Kirim WA Manual](#72-kirim-wa-manual).
 
 ### 4.3 Absensi Hari Ini
@@ -914,15 +914,15 @@ GET /api/absensi/hari-ini
       "nama_rombel": "KELAS 3A",
       "waktu_absen": "2026-09-24T00:12:30.000Z",
       "status": "Tidak Hadir",
-      "keterangan": "Alfa",
+      "keterangan": "Alpha",
       "metode": "sistem"
     }
   ]
 }
 ```
 
-**Catatan:** mulai jam masuk, daftar ini bakal nambah baris alfa otomatis
-(`status: "Tidak Hadir"`, `keterangan: "Alfa"`, `metode: "sistem"`) buat siswa yang belum scan.
+**Catatan:** mulai jam masuk, daftar ini bakal nambah baris alpha otomatis
+(`status: "Tidak Hadir"`, `keterangan: "Alpha"`, `metode: "sistem"`) buat siswa yang belum scan.
 Guru cuma lihat absensi kelasnya sendiri.
 
 **Buat polling real-time:** Panggil endpoint ini tiap 5-10 detik selama sesi absen berlangsung.
@@ -947,7 +947,7 @@ GET /api/absensi
 | `tanggal_selesai` | date | - | Format: YYYY-MM-DD (WIB), **inklusif** |
 | `kelas` | string | - | Filter nama rombel |
 | `status` | string | - | Hadir / Terlambat / Izin / Sakit / Tidak Hadir |
-| `keterangan` | string | - | Izin / Sakit / Alfa — buat misahin "Tidak Hadir" |
+| `keterangan` | string | - | Izin / Sakit / Alpha — buat misahin "Tidak Hadir" |
 | `search` | string | - | Cari nama atau NISN (case-insensitive, bisa sebagian) |
 
 **Contoh:**
@@ -959,8 +959,8 @@ api.get('/api/absensi?tanggal_mulai=2026-09-18&tanggal_selesai=2026-09-24');
 // Filter kelas tertentu
 api.get('/api/absensi?kelas=KELAS%203A&status=Hadir');
 
-// Cuma yang alfa (Tidak Hadir + keterangan Alfa)
-api.get('/api/absensi?status=Tidak%20Hadir&keterangan=Alfa');
+// Cuma yang alpha (Tidak Hadir + keterangan Alpha)
+api.get('/api/absensi?status=Tidak%20Hadir&keterangan=Alpha');
 
 // Cari nama / NISN
 api.get('/api/absensi?search=annasya');
@@ -989,7 +989,7 @@ api.get('/api/absensi?page=2&limit=20');
       "tanggal": "2026-09-24",
       "waktu_absen": "2026-09-24T00:12:30.000Z",
       "status": "Tidak Hadir",
-      "keterangan": "Alfa",
+      "keterangan": "Alpha",
       "metode": "sistem"
     }
   ],
@@ -1000,7 +1000,7 @@ api.get('/api/absensi?page=2&limit=20');
     "izin": 8,
     "sakit": 5,
     "tidak_hadir": 16,
-    "alfa": 11
+    "alpha": 11
   },
   "pagination": {
     "page": 1,
@@ -1013,13 +1013,13 @@ api.get('/api/absensi?page=2&limit=20');
 
 **Catatan field:**
 
-- `keterangan` — isinya `Izin`/`Sakit`/`Alfa` kalau statusnya `Tidak Hadir`, selain itu `null`.
-  Dipakai buat misahin Izin, Sakit, dan Alfa yang semuanya berstatus "Tidak Hadir"
-- `metode` — `scan` / `manual` / `sistem` (alfa otomatis)
+- `keterangan` — isinya `Izin`/`Sakit`/`Alpha` kalau statusnya `Tidak Hadir`, selain itu `null`.
+  Dipakai buat misahin Izin, Sakit, dan Alpha yang semuanya berstatus "Tidak Hadir"
+- `metode` — `scan` / `manual` / `sistem` (alpha otomatis)
 - `ringkasan` — dihitung dari **seluruh hasil filter**, bukan cuma 1 halaman. Jadi angkanya
   tetap bener walau `limit` kecil. `hadir` & `terlambat` dari status; `izin`/`sakit` ngegabungin
   status lama (`Izin`/`Sakit`) **dan** bentuk baru (`Tidak Hadir` + keterangan); `tidak_hadir`
-  ngitung semua yang berstatus "Tidak Hadir"; `alfa` khusus keterangan Alfa
+  ngitung semua yang berstatus "Tidak Hadir"; `alpha` khusus keterangan Alpha
 
 ### 4.5 Riwayat Per Siswa
 
@@ -1055,7 +1055,7 @@ GET /api/absensi/siswa/:peserta_didik_id
 ### 4.6 Edit Absensi
 
 Buat ngubah status/keterangan absensi yang udah tercatat. Kasus utama: siswa ditandai
-**Alfa otomatis** oleh cron, ternyata bawa surat izin -> admin edit jadi Izin.
+**Alpha otomatis** oleh cron, ternyata bawa surat izin -> admin edit jadi Izin.
 
 **Endpoint:**
 
@@ -1076,7 +1076,7 @@ PUT /api/absensi/:absensi_id
 
 **Aturan validasi:** sama kayak absen manual — `status` harus salah satu dari
 Hadir/Terlambat/Izin/Sakit/Tidak Hadir, dan kalau `status = "Tidak Hadir"` maka
-`keterangan` wajib `Izin` / `Sakit` / `Alfa`.
+`keterangan` wajib `Izin` / `Sakit` / `Alpha`.
 
 **Response 200:**
 
@@ -1114,7 +1114,7 @@ Hadir/Terlambat/Izin/Sakit/Tidak Hadir, dan kalau `status = "Tidak Hadir"` maka
 ```json
 {
   "success": false,
-  "message": "Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alfa",
+  "message": "Status 'Tidak Hadir' wajib diberi keterangan Izin, Sakit, atau Alpha",
   "error_code": "VALIDATION_ERROR"
 }
 ```
@@ -1182,7 +1182,7 @@ GET /api/dashboard/ringkasan
     "izin": 3,
     "sakit": 2,
     "tidak_hadir": 12,
-    "alfa": 7,
+    "alpha": 7,
     "alpha": 7,
     "persentase_hadir": 93.02
   }
@@ -1195,19 +1195,19 @@ GET /api/dashboard/ringkasan
 Total Siswa:  301
 Hadir:        280  (93.02%)
 Terlambat:    5
-Tidak Hadir:  12   <- termasuk yang alfa
+Tidak Hadir:  12   <- termasuk yang alpha
 Izin:         3
 Sakit:        2
-Alfa:         7
+Alpha:         7
 ```
 
 **Catatan field:**
 
-- `alfa` **dan** `alpha` sama isinya — alias dobel, biar frontend yang udah nulis
-  `dashboard.alpha` tetap jalan. Keduanya = jumlah `Tidak Hadir` dengan keterangan `Alfa`
+- `alpha` **dan** `alpha` sama isinya — alias dobel, biar frontend yang udah nulis
+  `dashboard.alpha` tetap jalan. Keduanya = jumlah `Tidak Hadir` dengan keterangan `Alpha`
 - `izin`/`sakit` ngegabungin status lama (`Izin`/`Sakit`) **dan** bentuk baru
   (`Tidak Hadir` + keterangan `Izin`/`Sakit`), jadi data lama tetap kehitung
-- `tidak_hadir` ngitung **semua** yang berstatus "Tidak Hadir" (izin + sakit + alfa)
+- `tidak_hadir` ngitung **semua** yang berstatus "Tidak Hadir" (izin + sakit + alpha)
 - Guru cuma lihat angka kelasnya sendiri
 
 ### 5.2 Tren Kehadiran (7 Hari)
@@ -1269,7 +1269,7 @@ GET /api/dashboard/per-kelas
 
 ### 5.4 Siswa Bermasalah (Flagging)
 
-Siswa yang sering alfa (total alfa >= 3).
+Siswa yang sering alpha (total alpha >= 3).
 
 **Endpoint:**
 
@@ -1292,7 +1292,7 @@ GET /api/dashboard/siswa-bermasalah
       "peserta_didik_id": "uuid",
       "nama": "Budi Santoso",
       "nama_rombel": "KELAS 5A",
-      "total_alfa": 12
+      "total_alpha": 12
     }
   ]
 }
@@ -1301,7 +1301,7 @@ GET /api/dashboard/siswa-bermasalah
 **Buat tampilan:**
 
 ```
-Nama              Kelas       Alfa
+Nama              Kelas       Alpha
 Budi Santoso      KELAS 5A    12x
 Siti Nurhaliza    KELAS 4B     5x
 ```
@@ -1454,7 +1454,7 @@ Ambil 50 log terakhir. Response:
 ### 7.2 Kirim WA Manual
 
 Kirim (atau kirim ulang) WA hasil absen ke wali siswa. Dipake buat status yang
-**tidak** auto-kirim: Izin, Sakit, Alfa, Tidak Hadir.
+**tidak** auto-kirim: Izin, Sakit, Alpha, Tidak Hadir.
 
 **Endpoint:**
 
@@ -1621,21 +1621,21 @@ Tanggal: {YYYY-MM-DD}
 
 ---
 
-## 8. Cron Alfa Otomatis
+## 8. Cron Alpha Otomatis
 
-Siswa yang **sampai `ABSEN_BATAS_ALFA` (default 08:00 WIB) belum absen** otomatis ditandai:
-`status = "Tidak Hadir"`, `keterangan = "Alfa"`, `metode = "sistem"`.
+Siswa yang **sampai `ABSEN_BATAS_ALPHA` (default 08:00 WIB) belum absen** otomatis ditandai:
+`status = "Tidak Hadir"`, `keterangan = "Alpha"`, `metode = "sistem"`.
 
 Jamnya sengaja sama dengan `ABSEN_JAM_SELESAI` — pas jam absen tutup, sisa siswa yang belum
-scan langsung dihitung alfa. Baris alfa dicatat dengan `waktu_absen` = jam alfa (08:00 WIB),
+scan langsung dihitung alpha. Baris alpha dicatat dengan `waktu_absen` = jam alpha (08:00 WIB),
 bukan tengah malam, biar jamnya masuk akal di riwayat.
 Bisa diedit jadi Izin/Sakit lewat [4.6 Edit Absensi](#46-edit-absensi).
 
 **Endpoint:**
 
 ```
-GET /api/cron/alfa
-GET /api/cron/alfa?tanggal=YYYY-MM-DD
+GET /api/cron/alpha
+GET /api/cron/alpha?tanggal=YYYY-MM-DD
 ```
 
 **Header (pilih salah satu):**
@@ -1643,7 +1643,7 @@ GET /api/cron/alfa?tanggal=YYYY-MM-DD
 - `Authorization: Bearer {CRON_SECRET}` (dipakai Vercel Cron)
 - `x-cron-secret: {CRON_SECRET}`
 
-`tanggal` opsional (default hari ini WIB) — buat nandai alfa di tanggal lampau.
+`tanggal` opsional (default hari ini WIB) — buat nandai alpha di tanggal lampau.
 
 **Response 200:**
 
@@ -1712,19 +1712,19 @@ bukan nempel ke absen kemarin.
 | Scan QR `07:00` – `< 08:00` WIB | `Terlambat` | — |
 | Scan QR di luar `06:00`–`08:00` | ❌ ditolak `400` | Absen tidak dicatat |
 | Input manual Hadir (lupa kartu) | `Hadir` | bebas (opsional) |
-| Input manual tidak masuk sekolah | `Tidak Hadir` | **Wajib** `Sakit` / `Izin` / `Alfa` |
-| Belum absen sampai `08:00` (cron) | `Tidak Hadir` | `Alfa` |
-| Scan datang telat setelah ditandai alfa | `Terlambat` | Alfa ditimpa (`diubah_dari_alfa: true`) |
+| Input manual tidak masuk sekolah | `Tidak Hadir` | **Wajib** `Sakit` / `Izin` / `Alpha` |
+| Belum absen sampai `08:00` (cron) | `Tidak Hadir` | `Alpha` |
+| Scan datang telat setelah ditandai alpha | `Terlambat` | Alpha ditimpa (`diubah_dari_alpha: true`) |
 
 ### Ringkasan jam (WIB)
 
 ```
-  ditolak   |   Hadir    |  Terlambat  |     ditolak / alfa otomatis
+  ditolak   |   Hadir    |  Terlambat  |     ditolak / alpha otomatis
    (400)    |            |             |            (400)
 ────────────┼────────────┼─────────────┼──────────────────────────────
   00:00 ...   06:00 ...    07:00 ...     08:00 ... 23:59
                  ▲             ▲              ▲
-                 │             │              └── ABSEN_JAM_SELESAI & ABSEN_BATAS_ALFA
+                 │             │              └── ABSEN_JAM_SELESAI & ABSEN_BATAS_ALPHA
                  │             └────────────────── ABSEN_BATAS_MASUK
                  └──────────────────────────────── ABSEN_JAM_MULAI
 ```
@@ -1735,7 +1735,7 @@ bukan nempel ke absen kemarin.
 |--------|-------------|-----------|
 | `Hadir` | ✅ (kalau setelan `wa_kirim_otomatis` = otomatis) | ✅ |
 | `Terlambat` | ✅ (kalau setelan `wa_kirim_otomatis` = otomatis) | ✅ |
-| `Tidak Hadir` (Izin/Sakit/Alfa) | ❌ | ✅ |
+| `Tidak Hadir` (Izin/Sakit/Alpha) | ❌ | ✅ |
 
 Setelan otomatis/manual bisa dibaca & diubah lewat [7.3 Setting Notifikasi](#73-setting-notifikasi).
 
@@ -1871,7 +1871,7 @@ if (res.status === 200) {
   // data.status SELALU ada ("Hadir" / "Terlambat")
   // data.jam_absen = "07:12" (jam WIB siap tampil)
   alert(`Absen berhasil!\n${data.nama}\n${data.label_status || data.status}`);
-  if (data.diubah_dari_alfa) alert('Catatan alfa otomatis diganti jadi Terlambat');
+  if (data.diubah_dari_alpha) alert('Catatan alpha otomatis diganti jadi Terlambat');
 }
 
 // Kalo 400 OUTSIDE_ABSEN_HOURS (di luar jam sekolah)
@@ -1887,10 +1887,10 @@ if (res.status === 409) {
 **Status dihitung otomatis** dari jam scan (WIB) vs `ABSEN_BATAS_MASUK` — lewat batas
 langsung dapet `status: "Terlambat"`, ga perlu ditentuin frontend.
 
-### Flow Edit Absen Alfa jadi Izin
+### Flow Edit Absen Alpha jadi Izin
 
 ```javascript
-// Alfa otomatis udah ditandai cron (status: "Tidak Hadir", keterangan: "Alfa")
+// Alpha otomatis udah ditandai cron (status: "Tidak Hadir", keterangan: "Alpha")
 // Ternyata siswa bawa surat izin -> admin edit:
 await api.put(`/api/absensi/${absensi_id}`, {
   status: 'Tidak Hadir',
@@ -1901,7 +1901,7 @@ await api.put(`/api/absensi/${absensi_id}`, {
 ### Flow Kirim WA Manual
 
 ```javascript
-// Otomatis cuma buat Hadir/Terlambat. Buat Izin/Sakit/Alfa, admin kirim sendiri:
+// Otomatis cuma buat Hadir/Terlambat. Buat Izin/Sakit/Alpha, admin kirim sendiri:
 await api.post(`/api/notifikasi/kirim/${absensi_id}`);
 // -> { success: true, data: { status: "dikirim" } }
 ```
@@ -1923,5 +1923,5 @@ await api.post('/api/siswa/kartu-qr/bulk', { kelas: 'KELAS 3A' }, { responseType
 3. **Nama field:** `snake_case` semua. Jangan pake camelCase
 4. **Display value:** pake field yang ada `_str` kalo perlu teks (contoh: `agama_id_str`)
 5. **Kelas:** namanya `KELAS 3A`, `KELAS 1B`, dll. Pake spasi. Kalo mau filter, URL encode jadi `KELAS%203A`
-6. **Tidak hadir:** pakai `status: "Tidak Hadir"` + `keterangan` (`Izin`/`Sakit`/`Alfa`) — bukan status terpisah
+6. **Tidak hadir:** pakai `status: "Tidak Hadir"` + `keterangan` (`Izin`/`Sakit`/`Alpha`) — bukan status terpisah
 7. **Hari absensi:** batasnya jam **00:00 WIB**, bukan UTC. Absen jam 00:30 WIB masuk hari baru

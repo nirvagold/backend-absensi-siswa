@@ -61,10 +61,10 @@ if (require.main === module) {
   });
 
   // ── Scheduler dalam-proses (fallback utk long-running process, mis. Railway) ──
-  // Menjalankan job alfa otomatis sekali sehari di jam alfa,
-  // (ABSEN_BATAS_ALFA, default 08:00 WIB). Nonaktifkan dgn env JADWAL_JOBS=false.
-  // Pada Vercel (serverless), Vercel Cron-lah yang memanggil /api/cron/alfa.
-  const { tandaiAlfaSemuaSekolah, batasMasukMenit } = require("./scripts/alfa");
+  // Menjalankan job alpha otomatis sekali sehari di jam alpha,
+  // (ABSEN_BATAS_ALPHA, default 08:00 WIB). Nonaktifkan dgn env JADWAL_JOBS=false.
+  // Pada Vercel (serverless), Vercel Cron-lah yang memanggil /api/cron/alpha.
+  const { tandaiAlphaSemuaSekolah, batasMasukMenit } = require("./scripts/alpha");
   const { menitWIB, tanggalStrWIB } = require("./utils/waktu");
 
   if (process.env.JADWAL_JOBS !== "false") {
@@ -82,8 +82,8 @@ if (require.main === module) {
         // dan belum dijalankan hari ini.
         if (menitSekarang >= targetMenit && lastRunDay !== todayKey) {
           lastRunDay = todayKey;
-          console.log(`[scheduler] menjalankan penandaan alfa otomatis ${todayKey} (WIB)`);
-          await tandaiAlfaSemuaSekolah();
+          console.log(`[scheduler] menjalankan penandaan alpha otomatis ${todayKey} (WIB)`);
+          await tandaiAlphaSemuaSekolah();
           console.log("[scheduler] selesai.");
         }
       } catch (e) {
