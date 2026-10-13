@@ -10,21 +10,19 @@
 // endpoint update absensi (ubah kolom keterangan pada record yang sama).
 
 const prisma = require("../config/prisma");
-const { rentangHariWIB } = require("../utils/waktu");
+const { rentangHariWIB, waktuDariJamWIB } = require("../utils/waktu");
+const { getBatasAlfa } = require("../config/absensi");
 
 // Ambil semua sekolah (dipakai cron & scheduler)
 async function ambilSekolah() {
   return prisma.sekolah.findMany({ select: { sekolah_id: true } });
 }
 
-// Batas jam masuk dalam menit sejak 00:00 WIB (dari env jam 9 = 540).
+// Jam alfa otomatis dalam menit sejak 00:00 WIB.
+// Sumbernya env ABSEN_BATAS_ALFA (default 08:00 = 480), dijaga di config/absensi.js
+// biar satu tempat sama aturan jam yang lain.
 function batasMasukMenit() {
-  const v = process.env.ABSEN_BATAS_MASUK;
-  if (!v) return 9 * 60; // default 09:00 WIB
-  const m = String(v).match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return 9 * 60;
-  const menit = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-  return Number.isNaN(menit) ? 9 * 60 : menit;
+  return getBatasAlfa();
 }
 
 // Tandai semua siswa aktif (belum absen) milik sebuah sekolah pada tanggal
@@ -79,7 +77,9 @@ async function tandaiAlfaSekolah(sekolahId, tgl) {
           peserta_didik_id: s.peserta_didik_id,
           sekolah_id: sekolahId,
           tanggal: awalHari,
-          waktu_absen: awalHari,
+          // Jam alfa (default 08:00 WIB), bukan tengah malam -- biar di riwayat
+          // jamnya masuk akal dan konsisten sama jam WIB yang lain.
+          waktu_absen: waktuDariJamWIB(awalHari, batasMasukMenit()),
           status: "Tidak Hadir",
           keterangan: "Alfa",
           metode: "sistem",

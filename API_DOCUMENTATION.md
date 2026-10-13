@@ -638,12 +638,14 @@ POST /api/absensi/scan
 8. Kalo belum -> hitung status dari jam scan -> catat -> berhasil
 ```
 
-**Dua pengaturan jam (jangan ketuker):**
+**Pembagian jam (jangan ketuker):**
 
 | Env | Fungsi | Default |
 |-----|--------|---------|
-| `ABSEN_JAM_MULAI` / `ABSEN_JAM_SELESAI` | **Jam operasional** — di luar rentang ini scan **ditolak** (`400`), absen tidak dicatat | `06:00` / `12:00` |
-| `ABSEN_BATAS_MASUK` | **Batas keterlambatan** — di dalam jam operasional, lewat jam ini status jadi `Terlambat` | `09:00` |
+| `ABSEN_JAM_MULAI` | Jam absen dibuka — sebelum ini scan **ditolak** (`400`) | `06:00` |
+| `ABSEN_BATAS_MASUK` | **Batas keterlambatan** — lewat jam ini status jadi `Terlambat` | `07:00` |
+| `ABSEN_JAM_SELESAI` | Jam absen tutup — **tepat/selepas** ini scan **ditolak** (`400`) | `08:00` |
+| `ABSEN_BATAS_ALFA` | Jam alfa otomatis — siswa yang belum absen ditandai `Tidak Hadir` + `Alfa` | `08:00` |
 
 **Status otomatis dari jam scan:**
 
@@ -651,8 +653,11 @@ Status dihitung dari **jam WIB** waktu scan dibandingkan `ABSEN_BATAS_MASUK`:
 
 | Waktu scan (WIB) | Status |
 |------------------|--------|
-| Sebelum/tepat batas masuk | `Hadir` |
-| Setelah batas masuk | `Terlambat` |
+| `< 07:00` | `Hadir` |
+| `07:00` – `< 08:00` | `Terlambat` |
+| `>= 08:00` | **ditolak** `400 OUTSIDE_ABSEN_HOURS` (masuk alfa otomatis) |
+
+Ringkasnya: **06–07 Hadir, 07–08 Terlambat, 08+ tidak bisa scan** alias dihitung alfa.
 
 Scan yang berhasil **tidak pernah** otomatis jadi "Tidak Hadir" — paling jauh "Terlambat".
 Status "Tidak Hadir"/Alfa ditentukan oleh alfa otomatis (cron) atau input manual.
@@ -662,9 +667,10 @@ Status "Tidak Hadir"/Alfa ditentukan oleh alfa otomatis (cron) atau input manual
 `Terlambat` + WA otomatis terkirim, dan response dapat tambahan `"diubah_dari_alfa": true`.
 Catatan hasil scan atau input manual tetap tidak bisa ditimpa (balas `409`).
 
-**WA otomatis:** kalau `WA_KIRIM_OTOMATIS` bukan `"false"` dan siswa punya nomor wali,
-backend kirim WA (status Hadir/Terlambat) ke orang tua via Fonnte secara async.
-Gagal kirim tidak menggagalkan absensi.
+**WA otomatis:** dikontrol setelan di database (`wa_kirim_otomatis`), yang bisa diubah admin
+lewat `PUT /api/notifikasi/setting`. Nilai awalnya dari env `WA_KIRIM_OTOMATIS` (default aktif).
+Kalau aktif dan siswa punya nomor wali, backend kirim WA (status Hadir/Terlambat) via Fonnte
+secara async. Gagal kirim tidak menggagalkan absensi.
 
 **Response 200 -- Berhasil:**
 
@@ -681,19 +687,27 @@ Gagal kirim tidak menggagalkan absensi.
     "nama": "ANNASYA AZRA IZZATUNNISA",
     "nama_rombel": "KELAS 3A",
     "tanggal": "2026-09-24",
-    "waktu_absen": "2026-09-24T07:12:30.000Z",
+    "waktu_absen": "2026-09-24T00:12:30.000Z",
+    "jam_absen": "07:12",
     "status": "Hadir",
+    "keterangan": null,
+    "label_status": "Hadir",
     "metode": "scan"
   }
 }
 ```
 
+> **Catatan:** `status` **selalu** ada di response scan. Dulu field ini sempat hilang, jadi
+> kartu "Hasil Absensi" di ScannerView nampilin `-`. `jam_absen` = jam WIB siap tampil
+> (biar gak perlu format timezone di frontend), dan `label_status` = teks siap pakai
+> (`"Tidak Hadir (Alfa)"`). Field `metode` isinya `scan` / `manual` / `sistem`.
+
 **Yang harus ditampilkan di frontend setelah sukses:**
 
 - Nama siswa: `ANNASYA AZRA IZZATUNNISA`
 - Kelas: `KELAS 3A`
-- Waktu: `07:12`
-- Status: `Hadir`
+- Waktu: `jam_absen` (`07:12`) — atau `waktu_absen` + `timeZone: 'Asia/Jakarta'`
+- Status: `label_status` (kalau kosong, fallback ke `status`)
 - Pesan: `Absensi berhasil dicatat`
 
 **Response 409 -- Udah absen:**
@@ -740,18 +754,24 @@ Gagal kirim tidak menggagalkan absensi.
 ```json
 {
   "success": false,
-  "message": "Absen ditolak: sudah lewat jam absen. Jam absen dibuka 06:00 - 12:00 WIB",
+  "message": "Absen ditolak: sudah lewat jam absen. Jam absen dibuka 06:00 - 08:00 WIB (Hadir sampai 07:00, alfa otomatis 08:00)",
   "error_code": "OUTSIDE_ABSEN_HOURS",
   "data": {
     "waktu_scan": "2026-10-12T16:50:11.057Z",
-    "jam_wib": "23:50"
+    "jam_wib": "23:50",
+    "jam_buka": "06:00",
+    "jam_batas_masuk": "07:00",
+    "jam_tutup": "08:00"
   }
 }
 ```
 
-`alasan` di pesan bisa `"sebelum jam absen dibuka"` (scan pagi-pagi banget) atau
-`"sudah lewat jam absen"` (scan siang/sore/malam). **Absen tidak dicatat** — petugas
-harus input manual kalau memang tetap mau dicatat.
+`alasan` di pesan bisa `"sebelum jam absen dibuka"` (scan sebelum `ABSEN_JAM_MULAI`) atau
+`"sudah lewat jam absen"` (scan **tepat/selepas** `ABSEN_JAM_SELESAI`). **Absen tidak dicatat** —
+petugas harus input manual kalau memang tetap mau dicatat.
+
+`data` bawa `jam_buka` / `jam_batas_masuk` / `jam_tutup` biar frontend bisa nampilin pesan
+yang lebih enak dibaca tanpa nge-hardcode jamnya.
 
 ### 4.2 Absen Manual
 
@@ -1492,7 +1512,17 @@ dan kegagalan tetap dicatat di log):
 
 ### 7.3 Setting Notifikasi
 
-**Endpoint:**
+Dua pilihan pengiriman WA (POINT #1):
+
+- **Otomatis** — WA langsung dikirim ke wali setiap ada absen `Hadir`/`Terlambat`
+- **Manual** — WA tidak dikirim otomatis; admin kirim sendiri dari Riwayat
+  (`POST /api/notifikasi/kirim/:absensi_id`)
+
+Setelan ini disimpan di tabel `pengaturan` (per sekolah), jadi **admin bisa ganti sendiri
+dari UI tanpa deploy ulang**. Nilai awalnya diambil dari env `WA_KIRIM_OTOMATIS` selama
+barisnya belum pernah diisi.
+
+**Endpoint baca:**
 
 ```
 GET /api/notifikasi/setting
@@ -1504,13 +1534,56 @@ GET /api/notifikasi/setting
 {
   "results": 1,
   "id": "wa_otomatis",
+  "start": 0,
+  "limit": 1,
   "rows": {
-    "wa_otomatis": true
+    "wa_otomatis": true,
+    "pilihan": {
+      "otomatis": "WA langsung dikirim ke wali setiap absen Hadir/Terlambat",
+      "manual": "WA tidak dikirim otomatis — admin kirim sendiri dari Riwayat"
+    },
+    "dari_env": false
   }
 }
 ```
 
-`wa_otomatis` dibaca dari env `WA_KIRIM_OTOMATIS` (`"false"` = mati).
+- `wa_otomatis` — `true` = otomatis, `false` = manual
+- `dari_env` — `true` kalau belum pernah diset dari UI (masih ikut env)
+
+**Endpoint ubah:**
+
+```
+PUT /api/notifikasi/setting
+```
+
+**Header:** `Authorization: Bearer {token}` (**Admin saja**)
+
+**Body** (pilih salah satu bentuk):
+
+```json
+{ "wa_otomatis": true }
+```
+
+```json
+{ "mode": "otomatis" }
+```
+
+`mode` isinya `"otomatis"` atau `"manual"`. Bentuk lain dibalas `400 VALIDATION_ERROR`.
+
+**Response 200:**
+
+```json
+{
+  "results": 1,
+  "id": "wa_otomatis",
+  "start": 0,
+  "limit": 1,
+  "rows": {
+    "wa_otomatis": true,
+    "dari_env": false
+  }
+}
+```
 
 ### 7.4 Test Kirim WA
 
@@ -1550,9 +1623,12 @@ Tanggal: {YYYY-MM-DD}
 
 ## 8. Cron Alfa Otomatis
 
-Siswa yang **sampai lewat jam masuk (`ABSEN_BATAS_MASUK`, default 09:00 WIB) belum absen**
-otomatis ditandai:
+Siswa yang **sampai `ABSEN_BATAS_ALFA` (default 08:00 WIB) belum absen** otomatis ditandai:
 `status = "Tidak Hadir"`, `keterangan = "Alfa"`, `metode = "sistem"`.
+
+Jamnya sengaja sama dengan `ABSEN_JAM_SELESAI` — pas jam absen tutup, sisa siswa yang belum
+scan langsung dihitung alfa. Baris alfa dicatat dengan `waktu_absen` = jam alfa (08:00 WIB),
+bukan tengah malam, biar jamnya masuk akal di riwayat.
 Bisa diedit jadi Izin/Sakit lewat [4.6 Edit Absensi](#46-edit-absensi).
 
 **Endpoint:**
@@ -1608,7 +1684,7 @@ GET /api/cron/alfa?tanggal=YYYY-MM-DD
 
 **Siapa yang manggil:**
 
-- **Vercel** (serverless): Vercel Cron di `vercel.json` — `0 2 * * *` UTC (= **09:00 WIB**) — otomatis manggil endpoint ini tiap hari. Set `CRON_SECRET` di dashboard Vercel.
+- **Vercel** (serverless): Vercel Cron di `vercel.json` — `0 1 * * *` UTC (= **08:00 WIB**) — otomatis manggil endpoint ini tiap hari. Set `CRON_SECRET` di dashboard Vercel.
 - **Railway / server long-running**: scheduler in-proses di `src/index.js` (cek tiap menit, jalan sekali sehari setelah jam masuk WIB). Matikan dengan `JADWAL_JOBS=false`.
 - **Manual**: panggil endpointnya pake curl / Postman.
 
@@ -1632,34 +1708,36 @@ bukan nempel ke absen kemarin.
 
 | Kejadian | Status | Keterangan |
 |----------|--------|------------|
-| Scan QR sebelum/tepat batas masuk | `Hadir` | — |
-| Scan QR setelah batas masuk | `Terlambat` | — |
-| Scan QR di luar jam operasional | ❌ ditolak `400` | Absen tidak dicatat |
-| Input manual Hadir (lupa kartu) | `Hadir` | — |
-| Input manual sakit/izin | `Tidak Hadir` | `Sakit` / `Izin` |
-| Lewat jam masuk belum absen (cron) | `Tidak Hadir` | `Alfa` |
+| Scan QR `< 07:00` WIB | `Hadir` | — |
+| Scan QR `07:00` – `< 08:00` WIB | `Terlambat` | — |
+| Scan QR di luar `06:00`–`08:00` | ❌ ditolak `400` | Absen tidak dicatat |
+| Input manual Hadir (lupa kartu) | `Hadir` | bebas (opsional) |
+| Input manual tidak masuk sekolah | `Tidak Hadir` | **Wajib** `Sakit` / `Izin` / `Alfa` |
+| Belum absen sampai `08:00` (cron) | `Tidak Hadir` | `Alfa` |
 | Scan datang telat setelah ditandai alfa | `Terlambat` | Alfa ditimpa (`diubah_dari_alfa: true`) |
 
 ### Ringkasan jam (WIB)
 
 ```
-   ditolak    |        diterima         |        ditolak
-   (400)      |     (jam operasional)   |         (400)
-──────────────┼─────────────────────────┼──────────────
-  00:00 ... 06:00       06:00 ... 12:00       12:00 ... 23:59
-                            │
-                        09:00 (ABSEN_BATAS_MASUK)
-                            │
-                   < 09:00 = Hadir, > 09:00 = Terlambat
+  ditolak   |   Hadir    |  Terlambat  |     ditolak / alfa otomatis
+   (400)    |            |             |            (400)
+────────────┼────────────┼─────────────┼──────────────────────────────
+  00:00 ...   06:00 ...    07:00 ...     08:00 ... 23:59
+                 ▲             ▲              ▲
+                 │             │              └── ABSEN_JAM_SELESAI & ABSEN_BATAS_ALFA
+                 │             └────────────────── ABSEN_BATAS_MASUK
+                 └──────────────────────────────── ABSEN_JAM_MULAI
 ```
 
 ### Ringkasan WA
 
 | Status | WA otomatis | WA manual |
 |--------|-------------|-----------|
-| `Hadir` | ✅ (kalau `WA_KIRIM_OTOMATIS` ≠ `"false"`) | ✅ |
-| `Terlambat` | ✅ (kalau `WA_KIRIM_OTOMATIS` ≠ `"false"`) | ✅ |
+| `Hadir` | ✅ (kalau setelan `wa_kirim_otomatis` = otomatis) | ✅ |
+| `Terlambat` | ✅ (kalau setelan `wa_kirim_otomatis` = otomatis) | ✅ |
 | `Tidak Hadir` (Izin/Sakit/Alfa) | ❌ | ✅ |
+
+Setelan otomatis/manual bisa dibaca & diubah lewat [7.3 Setting Notifikasi](#73-setting-notifikasi).
 
 ---
 
@@ -1790,12 +1868,15 @@ const res = await api.post('/api/absensi/scan', {
 
 if (res.status === 200) {
   const data = res.data.rows;
-  alert(`Absen berhasil!\n${data.nama}\n${data.status}`);
+  // data.status SELALU ada ("Hadir" / "Terlambat")
+  // data.jam_absen = "07:12" (jam WIB siap tampil)
+  alert(`Absen berhasil!\n${data.nama}\n${data.label_status || data.status}`);
   if (data.diubah_dari_alfa) alert('Catatan alfa otomatis diganti jadi Terlambat');
 }
 
 // Kalo 400 OUTSIDE_ABSEN_HOURS (di luar jam sekolah)
-// res.data.message -> "Absen ditolak: sudah lewat jam absen. Jam absen dibuka 06:00 - 12:00 WIB"
+// res.data.message -> "Absen ditolak: sudah lewat jam absen. Jam absen dibuka 06:00 - 08:00 WIB (...)"
+// res.data.data.jam_buka / jam_batas_masuk / jam_tutup -> nampilin jamnya tanpa hardcode
 
 // Kalo 409 (udah absen)
 if (res.status === 409) {

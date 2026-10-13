@@ -3,6 +3,7 @@ const prisma = require("../config/prisma");
 const { authMiddleware } = require("../middleware/auth");
 const { dapodikResponse, errorResponse } = require("../utils/response");
 const { jamStrWIB, tanggalStrWIB } = require("../utils/waktu");
+const { KUNCI, ambilSetelan, simpanSetelan, keBoolean } = require("../config/pengaturan");
 const axios = require("axios");
 
 const adminAuth = authMiddleware(["Admin"]);
@@ -54,9 +55,15 @@ async function catatLog(absensi_id, nomor_tujuan, pesan, result) {
   }
 }
 
-// App settings
-function waOtomatis() {
-  return process.env.WA_KIRIM_OTOMATIS !== "false";
+// POINT #1: pilihan kirim WA otomatis / manual.
+// Sumbernya tabel `pengaturan` (bisa diubah admin lewat PUT /api/notifikasi/setting).
+// Kalau belum pernah diisi, jatuh ke env WA_KIRIM_OTOMATIS (default: otomatis).
+const DEFAULT_WA_OTOMATIS = process.env.WA_KIRIM_OTOMATIS !== "false";
+
+async function waOtomatis(sekolahId) {
+  if (!sekolahId) return DEFAULT_WA_OTOMATIS;
+  const nilai = await ambilSetelan(sekolahId, KUNCI.WA_OTOMATIS);
+  return keBoolean(nilai, DEFAULT_WA_OTOMATIS);
 }
 
 // GET /api/notifikasi/log
@@ -72,11 +79,53 @@ router.get("/log", adminAuth, async (req, res) => {
   }
 });
 
-// GET /api/notifikasi/setting — baca setting (nanti bisa lewat satu endpoint)
+// GET /api/notifikasi/setting — baca setelan WA sekolah ini
 router.get("/setting", adminAuth, async (req, res) => {
-  res.json(dapodikResponse({
-    wa_otomatis: waOtomatis(),
-  }, { idField: "wa_otomatis", limit: 1 }));
+  try {
+    const wa_otomatis = await waOtomatis(req.user.sekolah_id);
+    res.json(dapodikResponse({
+      wa_otomatis,
+      // Info buat UI: dua pilihan yang tersedia.
+      pilihan: {
+        otomatis: "WA langsung dikirim ke wali setiap absen Hadir/Terlambat",
+        manual: "WA tidak dikirim otomatis — admin kirim sendiri dari Riwayat",
+      },
+      // Kalau true, nilainya masih ikut env (belum pernah diset dari UI).
+      dari_env: (await ambilSetelan(req.user.sekolah_id, KUNCI.WA_OTOMATIS)) === null,
+    }, { idField: "wa_otomatis", limit: 1 }));
+  } catch (err) {
+    console.error("Ambil setting WA error:", err);
+    res.status(500).json(errorResponse("Gagal ambil setting", "INTERNAL_ERROR", 500));
+  }
+});
+
+// PUT /api/notifikasi/setting — admin pilih otomatis / manual.
+// Body: { "wa_otomatis": true }  atau  { "mode": "otomatis" | "manual" }
+router.put("/setting", adminAuth, async (req, res) => {
+  try {
+    let nilai;
+    if (typeof req.body.wa_otomatis === "boolean") {
+      nilai = req.body.wa_otomatis;
+    } else if (typeof req.body.mode === "string") {
+      const mode = req.body.mode.toLowerCase().trim();
+      if (!["otomatis", "manual"].includes(mode)) {
+        return res.status(400).json(errorResponse("mode harus 'otomatis' atau 'manual'", "VALIDATION_ERROR"));
+      }
+      nilai = mode === "otomatis";
+    } else {
+      return res.status(400).json(errorResponse("Kirim { wa_otomatis: true|false } atau { mode: 'otomatis'|'manual' }", "VALIDATION_ERROR"));
+    }
+
+    await simpanSetelan(req.user.sekolah_id, KUNCI.WA_OTOMATIS, nilai ? "true" : "false");
+
+    res.json(dapodikResponse({
+      wa_otomatis: nilai,
+      dari_env: false,
+    }, { idField: "wa_otomatis", limit: 1 }));
+  } catch (err) {
+    console.error("Simpan setting WA error:", err);
+    res.status(500).json(errorResponse("Gagal simpan setting", "INTERNAL_ERROR", 500));
+  }
 });
 
 // POST /api/notifikasi/test — kirim WA test

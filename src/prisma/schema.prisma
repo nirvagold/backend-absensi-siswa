@@ -31,8 +31,26 @@ model sekolah {
   sesi_absensi sesi_absensi[]
   absensi      absensi[]
   sync_log     sync_log[]
+  pengaturan   pengaturan[]
 
   @@map("sekolah")
+}
+
+// Setelan aplikasi per sekolah (key-value).
+// Dipakai buat POINT #1: pilihan kirim WA otomatis setelah absen
+// (kunci "wa_kirim_otomatis" = "true" / "false").
+model pengaturan {
+  pengaturan_id String   @id @default(uuid()) @map("pengaturan_id")
+  sekolah_id    String
+  kunci         String
+  nilai         String
+  updated_at    DateTime @updatedAt
+
+  sekolah sekolah @relation(fields: [sekolah_id], references: [sekolah_id])
+
+  @@unique([sekolah_id, kunci])
+  @@index([sekolah_id])
+  @@map("pengaturan")
 }
 
 model users {

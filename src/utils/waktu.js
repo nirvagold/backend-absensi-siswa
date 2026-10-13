@@ -53,6 +53,14 @@ function dariTanggalStr(str) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+// Nilai DateTime untuk jam WIB tertentu pada hari `tanggal` (nilai kolom tanggal).
+// Contoh: menit 480 (08:00 WIB) -> tanggal + 1 jam (08:00 - 07:00 offset).
+// Dipakai buat nulis waktu_absen baris alfa otomatis, biar jamnya masuk akal
+// (jam alfa), bukan 00:00.
+function waktuDariJamWIB(tanggal, menit) {
+  return new Date(tanggal.getTime() + (menit - OFFSET_WIB_MENIT) * 60 * 1000);
+}
+
 module.exports = {
   OFFSET_WIB_MENIT,
   menitWIB,
@@ -62,4 +70,5 @@ module.exports = {
   awalHariWIBOffset,
   rentangHariWIB,
   dariTanggalStr,
+  waktuDariJamWIB,
 };

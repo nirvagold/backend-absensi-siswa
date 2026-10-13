@@ -43,8 +43,15 @@ router.get("/ringkasan", auth, async (req, res) => {
     const sakit =
       absensi.filter((a) => a.status === "Sakit").length +
       absensi.filter((a) => a.status === "Tidak Hadir" && a.keterangan === "Sakit").length;
-    const tidak_hadir = absensi.filter((a) => a.status === "Tidak Hadir").length;
     const alfa = absensi.filter((a) => a.status === "Tidak Hadir" && a.keterangan === "Alfa").length;
+
+    // Semua alasan ketidakhadiran (izin + sakit + alfa) -- angka "tidak hadir" yang
+    // dipakai di kartu dashboard, biar konsisten sama ringkasan riwayat.
+    const total_tidak_hadir = izin + sakit + alfa;
+    // Siswa yang sudah tercatat hadir/terlambat hari ini.
+    const sudah_absen = hadir + terlambat;
+    // Siswa yang belum punya catatan apa pun (belum scan, belum ditandai alfa).
+    const belum_absen = Math.max(0, total_siswa - sudah_absen - total_tidak_hadir);
 
     const data = {
       tanggal: tanggalStrWIB(today),
@@ -53,11 +60,20 @@ router.get("/ringkasan", auth, async (req, res) => {
       terlambat,
       izin,
       sakit,
-      tidak_hadir,
       alfa,
       // alias: DashboardView baca `dashboard.alpha` (ejaan Inggris).
       alpha: alfa,
+      // `tidak_hadir` = baris berstatus "Tidak Hadir" (izin/sakit/alfa bentuk baru),
+      // artinya sama persis dengan `tidak_hadir` di ringkasan riwayat & filter status.
+      tidak_hadir: absensi.filter((a) => a.status === "Tidak Hadir").length,
+      // POINT #5: rincian buat kartu dashboard — berapa hadir, berapa tidak hadir.
+      // `total_tidak_hadir` = SEMUA alasan ketidakhadiran (izin + sakit + alfa),
+      // termasuk data lama yang statusnya masih "Izin"/"Sakit".
+      total_tidak_hadir,
+      sudah_absen,
+      belum_absen,
       persentase_hadir: total_siswa > 0 ? +((hadir / total_siswa) * 100).toFixed(2) : 0,
+      persentase_tidak_hadir: total_siswa > 0 ? +((total_tidak_hadir / total_siswa) * 100).toFixed(2) : 0,
     };
 
     res.json(dapodikResponse(data, { idField: "tanggal", limit: 1 }));

@@ -3,8 +3,9 @@
 Dokumen ini buat tim frontend. Isinya: **apa yang berubah di backend**, **endpoint barunya**,
 dan **apa yang perlu disesuaikan di frontend** biar dua-duanya klop.
 
-Terakhir diperbarui: 2026-10-13 (setelah commit `c99f705` + `9dad209`, ditambah
-field baru backend: `keterangan`, `metode`, `ringkasan`, `alfa`/`alpha`, filter `keterangan` & `search`).
+Terakhir diperbarui: 2026-10-13 (jam absensi jadi 06:00–08:00 WIB, dashboard nambah
+`total_tidak_hadir`/`sudah_absen`/`belum_absen`, setting WA bisa diubah dari UI,
+field baru `jam_absen` & `label_status`).
 
 Base URL tetap sama: `https://backend-absensi-siswa-mu.vercel.app`
 
@@ -16,13 +17,16 @@ Base URL tetap sama: `https://backend-absensi-siswa-mu.vercel.app`
 |---|-----------|-------------------|
 | 1 | **Scan di luar jam sekolah ditolak** (400) | 🔴 **Wajib** — ScannerView harus nangkep error code baru |
 | 2 | **Status scan otomatis** Hadir/Terlambat dari jam | 🟢 Aman — ScannerView udah baca `rows.status` |
-| 3 | **Alfa otomatis** jam 09:00 WIB | ✅ **Beres** — dashboard `alfa`/`alpha` udah dikirim |
-| 4 | **"Tidak Hadir" wajib keterangan** Izin/Sakit/Alfa | 🔴 **Wajib** — ManualAbsensiView sekarang bakal ditolak 400 |
-| 5 | **Edit absensi** `PUT /api/absensi/:id` | 🟢 Endpoint baru, belum ada UI-nya |
-| 6 | **WA otomatis/manual** | 🟢 Endpoint baru, belum ada UI-nya |
-| 7 | **Zona waktu WIB** di semua hari/jam | 🟡 Perlu — format jam di frontend belum set timezone |
-| 8 | **`GET /api/absensi` nambah `keterangan`, `metode`, `ringkasan`** | ✅ **Beres** — tinggal dipakai di UI |
-| 9 | **Filter baru** `keterangan` + `search` | ✅ **Beres** — search Riwayat yang dulu gak jalan, sekarang jalan |
+| 3 | **Jam absensi baru**: 06–07 Hadir, 07–08 Terlambat, 08+ tutup | 🔴 **Wajib** — ubah teks jam di UI yang masih nulis 09:00 / 12:00 |
+| 4 | **Alfa otomatis** jam 08:00 WIB | ✅ **Beres** — dashboard `alfa`/`alpha` udah dikirim |
+| 5 | **"Tidak Hadir" wajib keterangan** Izin/Sakit/Alfa | 🔴 **Wajib** — ManualAbsensiView sekarang bakal ditolak 400 |
+| 6 | **Edit absensi** `PUT /api/absensi/:id` | 🟢 Endpoint baru, belum ada UI-nya |
+| 7 | **WA otomatis/manual** — bisa diganti dari UI | 🟢 Endpoint baru (`PUT /api/notifikasi/setting`), belum ada UI-nya |
+| 8 | **Dashboard nambah** `tidak_hadir`, `sudah_absen`, `belum_absen` | ✅ **Beres** — tinggal dipakai di UI |
+| 9 | **Zona waktu WIB** di semua hari/jam | 🟡 Perlu — format jam di frontend belum set timezone |
+| 10 | **`GET /api/absensi` nambah `keterangan`, `metode`, `ringkasan`** | ✅ **Beres** — tinggal dipakai di UI |
+| 11 | **Filter baru** `keterangan` + `search` | ✅ **Beres** — search Riwayat yang dulu gak jalan, sekarang jalan |
+| 12 | **Field baru** `jam_absen` + `label_status` di semua response absensi | ✅ **Beres** — bisa langsung dipakai, gak perlu format sendiri |
 
 ---
 
@@ -30,25 +34,38 @@ Base URL tetap sama: `https://backend-absensi-siswa-mu.vercel.app`
 
 ### 2.1 Scan di luar jam sekolah ditolak (BARU)
 
-**Aturan:** scan cuma diterima jam **06:00 – 12:00 WIB** (bisa diatur backend lewat env
-`ABSEN_JAM_MULAI` / `ABSEN_JAM_SELESAI`).
+**Aturan jam (WIB)** — bisa diatur backend lewat env, tapi defaultnya ini:
+
+| Jam WIB | Hasil scan |
+|---|---|
+| sebelum **06:00** | ❌ **400** — "sebelum jam absen dibuka" |
+| **06:00 – 07:00** | ✅ `Hadir` |
+| **07:00 – 08:00** | ✅ `Terlambat` |
+| **08:00** dst. | ❌ **400** — "sudah lewat jam absen" (masuk alfa otomatis) |
+
+Jadi **tidak ada** absensi Hadir jam 10 pagi lagi: lewat jam 08:00 pintunya tutup dan
+siswa yang belum scan langsung ditandai alfa.
 
 Di luar jam itu, `POST /api/absensi/scan` balas **400**:
 
 ```json
 {
   "success": false,
-  "message": "Absen ditolak: sudah lewat jam absen. Jam absen dibuka 06:00 - 12:00 WIB",
+  "message": "Absen ditolak: sudah lewat jam absen. Jam absen dibuka 06:00 - 08:00 WIB (Hadir sampai 07:00, alfa otomatis 08:00)",
   "error_code": "OUTSIDE_ABSEN_HOURS",
   "data": {
     "waktu_scan": "2026-10-12T16:50:11.057Z",
-    "jam_wib": "23:50"
+    "jam_wib": "23:50",
+    "jam_buka": "06:00",
+    "jam_batas_masuk": "07:00",
+    "jam_tutup": "08:00"
   }
 }
 ```
 
 `message` bisa diawali `"Absen ditolak: sebelum jam absen dibuka."` (scan kepagian)
-atau `"Absen ditolak: sudah lewat jam absen."` (scan kesorean).
+atau `"Absen ditolak: sudah lewat jam absen."` (scan kesorean). `data` sekarang juga
+ngirim jam-jamnya sendiri, jadi frontend bisa nampilin tanpa parse teks.
 
 > ### ⚠️ Ini masalah nomor satu di frontend sekarang
 >
@@ -79,21 +96,44 @@ lebih baik tampilkan `message` langsung daripada nulis pesan sendiri. Kode lain
 
 ### 2.2 Status scan otomatis: Hadir / Terlambat
 
-Scan sebelum/tepat jam 09:00 WIB → `Hadir`. Setelahnya → `Terlambat`.
+Scan sebelum jam **07:00 WIB** → `Hadir`. Jam 07:00 ke atas → `Terlambat`.
 **[ScannerView.vue:460](../../frontend/src/views/ScannerView.vue#L460) udah baca
 `attendanceResult.status`** — jadi gak perlu diubah, sudah klop. ✅
+
+Response scan sekarang **selalu** ada `status`-nya (sebelumnya bisa `undefined`, itu
+yang bikin kartu hasil nampilin `-`). Field yang dikirim:
+
+```json
+{
+  "status": "Hadir",
+  "keterangan": null,
+  "label_status": "Hadir",
+  "jam_absen": "06:42",
+  "metode": "scan"
+}
+```
+
+`label_status` = `status` yang udah digabung keterangan (`"Tidak Hadir (Alfa)"`).
+Buat baris Hadir/Terlambat isinya sama kayak `status`. **Pakai `label_status` kalau
+males nyusun sendiri, atau `status` + `keterangan` kalau mau styling beda per bagian.**
 
 Kartu "Absensi berhasil" di ScannerView selalu hijau walau statusnya Terlambat — kalau mau,
 warnanya bisa dibikin kuning untuk Terlambat. Opsional.
 
 ### 2.3 Alfa otomatis (BARU)
 
-Siswa yang sampai **09:00 WIB** belum scan otomatis dicatat
+Siswa yang sampai **08:00 WIB** belum scan otomatis dicatat
 `status: "Tidak Hadir"` + `keterangan: "Alfa"` + `metode: "sistem"`.
+Jamnya ikut `ABSEN_BATAS_ALFA` (default 08:00), dan Vercel Cron-nya sudah digeser
+ke jam yang sama (`0 1 * * *` UTC).
+
+Kalau siswa yang udah kena alfa ternyata datang dan scan (antara 07:00–08:00), barisnya
+**ditimpa** jadi `Terlambat` dan response scan nambah `diubah_dari_alfa: true`.
+Jadi siswa gak kena alfa + terlambat sekaligus.
 
 Efek di frontend:
 
-- **Dashboard** `tidak_hadir` bakal naik drastis setelah jam 9 (semua yang belum scan masuk situ)
+- **Dashboard** `tidak_hadir` bakal naik drastis setelah jam 8 (semua yang belum scan masuk situ)
 - **Riwayat** bakal muncul baris status `Tidak Hadir`, metode `sistem`
 
 ⚠️ **DashboardView baca `dashboard.alpha`** ([DashboardView.vue:264](../../frontend/src/views/DashboardView.vue#L264)).
@@ -144,6 +184,7 @@ Ini yang **paling mungkin bikin frontend error** sekarang.
 | `PUT /api/absensi/:absensi_id` | Ubah status/keterangan | Tombol "Edit" di tabel Riwayat (lihat 4.5) |
 | `POST /api/notifikasi/kirim/:absensi_id` | Kirim WA manual | Tombol "Kirim WA" di Riwayat |
 | `GET /api/notifikasi/setting` | Baca setting WA | Bisa buat nampilin status aktif/nonaktif |
+| `PUT /api/notifikasi/setting` | **Ubah** WA otomatis ↔ manual | Toggle di halaman Pengaturan (lihat 4.6) |
 | `GET /api/notifikasi/log` | 50 log WA terakhir | Halaman opsional |
 | `POST /api/notifikasi/test` | Tes kirim WA | Opsional, buat debugging |
 | `GET /api/cron/alfa` | Trigger alfa manual | **Jangan taruh di frontend** — ini endpoint cron |
@@ -211,6 +252,9 @@ Catatan untuk test: di DB produksi **belum ada** akun Kepala Sekolah
    ([baris 183–238](../../frontend/src/views/ManualAbsensiView.vue#L183))
 3. **ManualAbsensiView**: kirim `keterangan` yang bener sesuai status
 4. **Kedua file `formatTime`**: tambah `timeZone: 'Asia/Jakarta'`
+5. **Teks jam di UI**: mana pun yang masih nulis **09:00** atau **06:00–12:00** harus
+   diganti ke **06:00–08:00** (Hadir sampai 07:00). Kalau ada teks hardcoded soal
+   "absen sampai jam 12", itu udah gak berlaku.
 
 ### 🟡 P1 — biar informasi gak ilang
 
@@ -232,9 +276,10 @@ Catatan untuk test: di DB produksi **belum ada** akun Kepala Sekolah
 
 ## 4. Yang sudah dikerjakan backend
 
-### 4.1 ✅ `GET /api/absensi` sekarang kirim `keterangan` + `metode`
+### 4.1 ✅ `GET /api/absensi` sekarang kirim `keterangan` + `metode` + `jam_absen` + `label_status`
 
-Row `GET /api/absensi` dan `GET /api/absensi/hari-ini` sekarang punya 2 field tambahan:
+Row `GET /api/absensi`, `GET /api/absensi/hari-ini`, `GET /api/absensi/siswa/:id`,
+dan response scan/manual/edit sekarang semuanya pakai bentuk yang sama:
 
 ```json
 {
@@ -245,28 +290,37 @@ Row `GET /api/absensi` dan `GET /api/absensi/hari-ini` sekarang punya 2 field ta
   "nama_rombel": "KELAS 3A",
   "tanggal": "2026-10-13",
   "waktu_absen": "2026-10-13T00:12:30.000Z",
+  "jam_absen": "07:12",
   "status": "Tidak Hadir",
   "keterangan": "Alfa",
+  "label_status": "Tidak Hadir (Alfa)",
   "metode": "sistem"
 }
 ```
 
-`keterangan` isinya `Izin`/`Sakit`/`Alfa` kalau statusnya `Tidak Hadir`, selain itu `null`.
-`metode` isinya `scan` / `manual` / `sistem`.
+- `keterangan` isinya `Izin`/`Sakit`/`Alfa` kalau statusnya `Tidak Hadir`, selain itu `null`
+- `metode` isinya `scan` / `manual` / `sistem`
+- `jam_absen` = jam WIB siap tampil (string `HH:MM`) — **gak perlu format sendiri**, jadi
+  masalah timezone di kolom jam Riwayat hilang kalau pakai field ini
+- `label_status` = `status` yang udah digabung keterangan
 
 **Yang perlu di frontend:** RiwayatView sekarang bisa nampilin keterangan biar Izin, Sakit,
 dan Alfa gak kelihatan sama. Ikon "QR" di kolom metode
 ([baris 858](../../frontend/src/views/RiwayatView.vue#L858) ngecek `row.metode === 'QR'`)
 masih gak match — nilainya sekarang `scan`/`manual`/`sistem`, bukan `QR`.
 
-Saran tampilan kolom Status:
+Saran tampilan kolom Status — tinggal pakai field yang udah disiapin:
 
-```js
-// ganti {{ row.status }} jadi:
-row.status === 'Tidak Hadir' && row.keterangan
-  ? `Tidak Hadir — ${row.keterangan}`
-  : row.status
+```vue
+{{ row.label_status }}
+<!-- atau kalau mau warna beda per bagian: -->
+{{ row.status === 'Tidak Hadir' && row.keterangan
+     ? `Tidak Hadir — ${row.keterangan}`
+     : row.status }}
 ```
+
+Dan kolom jam cukup `{{ row.jam_absen }}` — gak usah `new Date().toLocaleTimeString()`
+lagi, sekalian lolos dari masalah timezone di 2.6.
 
 ### 4.2 ✅ `GET /api/absensi` sekarang kirim `ringkasan`
 
@@ -296,16 +350,41 @@ Label "Tanpa keterangan" di kartu Tidak Hadir
 ([baris 562](../../frontend/src/views/RiwayatView.vue#L562)) **sudah gak akurat** — sekarang
 "Tidak Hadir" hampir selalu punya keterangan (Izin/Sakit/Alfa) dan itulah isi kartunya.
 
-### 4.3 ✅ Dashboard sekarang kirim `alfa` + `alpha`
+### 4.3 ✅ Dashboard sekarang kirim `alfa` + `alpha` + hitungan tidak hadir
 
-`GET /api/dashboard/ringkasan` nambah 2 field (isinya sama, alias dobel):
+`GET /api/dashboard/ringkasan` nambah beberapa field:
 
 ```json
-"alfa": 7, "alpha": 7
+{
+  "tanggal": "2026-10-13",
+  "total_siswa": 301,
+  "hadir": 120, "terlambat": 14, "izin": 8, "sakit": 5, "alfa": 11,
+  "alpha": 11,
+  "tidak_hadir": 16,
+  "total_tidak_hadir": 24,
+  "sudah_absen": 134,
+  "belum_absen": 143,
+  "persentase_hadir": 39.9,
+  "persentase_tidak_hadir": 8.0
+}
 ```
 
 Jadi kartu "Alpha" di [DashboardView.vue:264](../../frontend/src/views/DashboardView.vue#L264)
 sekarang nampilin angka beneran, bukan 0 terus.
+
+Arti tiap field — bedanya halus tapi penting:
+
+| Field | Isi |
+|---|---|
+| `alfa` / `alpha` | yang **keterangannya** Alfa |
+| `izin`, `sakit` | yang keterangannya Izin / Sakit (termasuk status lama) |
+| `tidak_hadir` | **status** `Tidak Hadir` (semua keterangan digabung) — sama kayak `ringkasan.tidak_hadir` di Riwayat |
+| `total_tidak_hadir` | `izin + sakit + alfa` |
+| `sudah_absen` | `hadir + terlambat` |
+| `belum_absen` | `total_siswa − sudah_absen − total_tidak_hadir` |
+
+Hitungannya konsisten: `sudah_absen + total_tidak_hadir + belum_absen === total_siswa`.
+Jadi bisa bikin kartu "Belum Absen" = siswa yang belum kena apa-apa hari ini.
 
 Sekalian: `izin` dan `sakit` di dashboard sekarang ngegabungin status lama (`Izin`/`Sakit`)
 **dan** bentuk baru (`Tidak Hadir` + keterangan), biar data lama tetap kehitung.
@@ -350,15 +429,64 @@ Format body & response ada di [API_DOCUMENTATION.md](API_DOCUMENTATION.md) bagia
 
 Backend cuma nerima `status` + `keterangan`; `waktu_absen` & `metode` gak bisa diubah.
 
-### 4.6 Rencana WA otomatis
+### 4.6 ✅ WA otomatis/manual sekarang bisa diganti dari UI
+
+Dulu mode WA cuma bisa diubah lewat env (`WA_KIRIM_OTOMATIS`) yang butuh redeploy.
+Sekarang tersimpan di **database per sekolah**, jadi admin bisa nge-toggle sendiri.
 
 | Status | WA otomatis | WA manual |
 |---|---|---|
-| `Hadir` | ✅ kalau `WA_KIRIM_OTOMATIS` ≠ `"false"` | ✅ |
-| `Terlambat` | ✅ kalau `WA_KIRIM_OTOMATIS` ≠ `"false"` | ✅ |
+| `Hadir` | ✅ kalau mode = otomatis | ✅ |
+| `Terlambat` | ✅ kalau mode = otomatis | ✅ |
 | `Tidak Hadir` (Izin/Sakit/Alfa) | ❌ sengaja gak otomatis | ✅ |
 
-Sekarang `FONNTE_TOKEN` **belum diset di Vercel**, jadi semua pengiriman balas
+**Baca setting:**
+
+```
+GET /api/notifikasi/setting
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "wa_otomatis": true,
+    "pilihan": { "otomatis": true, "manual": false },
+    "dari_env": false
+  }
+}
+```
+
+`dari_env: true` artinya admin belum pernah nge-set dari UI, jadi yang dipakai masih
+nilai awal dari env. Cocok buat nampilin badge "belum diatur".
+
+**Ubah setting** (Admin & Kepala Sekolah):
+
+```
+PUT /api/notifikasi/setting
+```
+
+```json
+{ "wa_otomatis": false }
+```
+
+atau versi yang lebih enak dibaca dari toggle UI:
+
+```json
+{ "mode": "manual" }
+```
+
+`mode` isinya `"otomatis"` atau `"manual"`. Response balikannya sama kayak GET.
+Kalau body-nya kosong / nilainya ngawur → **400 VALIDATION_ERROR**. Harus salah satu,
+jangan kirim dua-duanya.
+
+**Saran UI:** toggle di halaman Pengaturan —
+*"Kirim WA otomatis setelah absen"* → on = `otomatis`, off = `manual`.
+Kalau `dari_env` masih `true`, tampilkan nilainya sebagai default dan kasih catatan
+kecil bahwa admin belum pernah ngubah.
+
+**Log WA** ada di `GET /api/notifikasi/log` (50 terakhir) kalau mau bikin halaman riwayat
+pengiriman. ⚠️ `FONNTE_TOKEN` **belum diset di Vercel**, jadi semua pengiriman balas
 `{ status: "gagal" }` (dan tetap tercatat di log). Selama token belum diisi, tombol
 "Kirim WA" bakal selalu balas gagal — bukan bug, cuma belum dikonfigurasi.
 
@@ -369,11 +497,12 @@ Sekarang `FONNTE_TOKEN` **belum diset di Vercel**, jadi semua pengiriman balas
 Sebelum nganggep dua sisi udah klop, cek ini:
 
 - [ ] **Scan jam 05:00 WIB** → ditolak 400, pesan nyebut "sebelum jam absen dibuka"
-- [ ] **Scan jam 07:00 WIB** → sukses, status `Hadir`
-- [ ] **Scan jam 10:00 WIB** → sukses, status `Terlambat`
-- [ ] **Scan jam 23:00 WIB** → ditolak 400, pesan nyebut "sudah lewat jam absen"
+- [ ] **Scan jam 06:30 WIB** → sukses, status `Hadir`
+- [ ] **Scan jam 07:30 WIB** → sukses, status `Terlambat`
+- [ ] **Scan jam 08:00 WIB** → ditolak 400, pesan nyebut "sudah lewat jam absen"
+- [ ] **Scan jam 10:00 WIB** → ditolak 400 (jam absen udah tutup jam 8)
 - [ ] **Scan siswa yang sama 2x** → yang kedua 409 "sudah absen pukul HH:MM WIB"
-- [ ] **Scan siswa yang udah kena alfa otomatis** → sukses jadi `Terlambat` + `diubah_dari_alfa`
+- [ ] **Scan siswa yang udah kena alfa otomatis** (jam 07:30) → sukses jadi `Terlambat` + `diubah_dari_alfa`
 - [ ] **Manual `Izin`** (cara lama) → tetap berhasil
 - [ ] **Manual `Tidak Hadir` tanpa keterangan** → 400
 - [ ] **Manual `Tidak Hadir` + keterangan `Alfa`** → berhasil
@@ -384,6 +513,7 @@ Sebelum nganggep dua sisi udah klop, cek ini:
 - [ ] **Kotak search Riwayat** beneran nyempit hasilnya
 - [ ] **Kartu "Alpha" di Dashboard** nampilin angka, bukan 0
 - [ ] **Filter `keterangan=Alfa`** → cuma nampilin yang alfa
+- [ ] **PUT `/api/notifikasi/setting`** `{"mode":"manual"}` → scan berikutnya gak kirim WA otomatis
 
 ---
 

@@ -1,13 +1,37 @@
-// Konfigurasi aturan absensi (batas jam) yang bisa diatur via env.
-// Dipakai untuk POINT #3: pembagian jam penghitungan terlambat.
+// Konfigurasi aturan jam absensi. Semua nilai bisa diatur lewat env.
+//
+// ── Pembagian jam (WIB) ──
+//   06:00 - 07:00  scan masuk  -> status "Hadir"
+//   07:00 - 08:00  scan masuk  -> status "Terlambat"
+//   08:00 dst.     jam absen tutup; siswa yang belum absen dihitung
+//                  "Tidak Hadir" + keterangan "Alfa" (alfa otomatis)
+//
+// Jamnya diatur lewat env:
+//   ABSEN_JAM_MULAI   (default "06:00") -- sebelum ini scan ditolak
+//   ABSEN_BATAS_MASUK (default "07:00") -- batas Hadir vs Terlambat
+//   ABSEN_JAM_SELESAI (default "08:00") -- setelah ini scan ditolak
+//   ABSEN_BATAS_ALFA  (default "08:00") -- jam alfa otomatis jalan
 //
 // Semua perbandingan jam pakai WIB (UTC+7) lewat utils/waktu, bukan jam server,
 // supaya hasilnya sama di Vercel (UTC) maupun lokal (WIB).
 
 const { menitWIB } = require("../utils/waktu");
 
-// Format env: "HH:MM" (24 jam). Kalau kosong/invalid, dianggap tidak aktif.
+// Nilai default (WIB). Dipakai kalau env kosong / formatnya salah.
+const DEFAULT_JAM = {
+  mulai: "06:00",
+  batasMasuk: "07:00",
+  selesai: "08:00",
+  batasAlfa: "08:00",
+};
 
+// Status & keterangan yang diterima API.
+const STATUS_VALID = ["Hadir", "Terlambat", "Izin", "Sakit", "Tidak Hadir"];
+const KETERANGAN_VALID = ["Izin", "Sakit", "Alfa"];
+// Status lama yang masih diterima (data & frontend versi sebelumnya).
+const STATUS_LEGACY = ["Izin", "Sakit"];
+
+// Format env: "HH:MM" (24 jam). Kalau kosong/invalid, kembalikan null.
 function parseJam(value) {
   if (!value) return null;
   const m = String(value).match(/^(\d{1,2}):(\d{2})$/);
@@ -17,39 +41,38 @@ function parseJam(value) {
   return menit; // dalam menit sejak 00:00
 }
 
-// Nilai dari env, di-baca sekali setiap request (biar bisa diubah tanpa restart).
-function getBatasMasuk() {
-  return parseJam(process.env.ABSEN_BATAS_MASUK);
+// Baca env, jatuh ke default kalau kosong/invalid.
+function menitEnv(namaEnv, defaultJam) {
+  return parseJam(process.env[namaEnv]) ?? parseJam(defaultJam);
 }
 
+// ── Batas-batas jam (dalam menit sejak 00:00 WIB) ──
+// Dibaca tiap request biar bisa diubah tanpa restart.
+
+function getJamMulai() {
+  return menitEnv("ABSEN_JAM_MULAI", DEFAULT_JAM.mulai);
+}
+
+function getJamSelesai() {
+  return menitEnv("ABSEN_JAM_SELESAI", DEFAULT_JAM.selesai);
+}
+
+// Batas Hadir -> Terlambat.
+function getBatasMasuk() {
+  return menitEnv("ABSEN_BATAS_MASUK", DEFAULT_JAM.batasMasuk);
+}
+
+// Jam alfa otomatis (siswa yang belum scan dianggap tidak hadir).
+function getBatasAlfa() {
+  return menitEnv("ABSEN_BATAS_ALFA", DEFAULT_JAM.batasAlfa);
+}
+
+// Lama dipakai cron/scheduler lama; sekarang ikut jam alfa.
 function getBatasSesi() {
   return parseJam(process.env.ABSEN_BATAS_SESI);
 }
 
-// ── Jam operasional absen (POINT #5) ──
-// Scan/absen di luar jam sekolah dianggap TIDAK VALID.
-// Batasnya bisa lewat env:
-//   ABSEN_JAM_MULAI (default "06:00") -- absen sebelum jam ini ditolak
-//   ABSEN_JAM_SELESAI (default "12:00") -- absen setelah jam ini ditolak
-// Set ABSEN_JAM_MULAI="00:00" & ABSEN_JAM_SELESAI="23:59" buat mematikan fitur ini.
-// Return { valid: bool, alasan: string|null }.
-function cekJamOperasional(date) {
-  // Pakai || bukan ?? : env kosong ("") harus jatuh ke default, bukan mematikan cek.
-  const mulai = parseJam(process.env.ABSEN_JAM_MULAI || "06:00");
-  const selesai = parseJam(process.env.ABSEN_JAM_SELESAI || "12:00");
-  const menit = menitDariTanggal(date);
-
-  if (mulai !== null && menit < mulai) {
-    return { valid: false, alasan: "sebelum jam absen dibuka" };
-  }
-  if (selesai !== null && menit > selesai) {
-    return { valid: false, alasan: "sudah lewat jam absen" };
-  }
-  return { valid: true, alasan: null };
-}
-
-// String "HH:MM" jam buka/tutup absen (buat pesan error). Fallback ke default
-// kalau env kosong/invalid, biar pesan tetap informatif.
+// "HH:MM" dari menit sejak 00:00. Buat pesan error / dokumentasi.
 function menitKeJam(menit) {
   const j = Math.floor(menit / 60);
   const m = menit % 60;
@@ -57,11 +80,19 @@ function menitKeJam(menit) {
 }
 
 function jamBuka() {
-  return menitKeJam(parseJam(process.env.ABSEN_JAM_MULAI || "06:00") ?? 6 * 60);
+  return menitKeJam(getJamMulai() ?? parseJam(DEFAULT_JAM.mulai));
 }
 
 function jamTutup() {
-  return menitKeJam(parseJam(process.env.ABSEN_JAM_SELESAI || "12:00") ?? 12 * 60);
+  return menitKeJam(getJamSelesai() ?? parseJam(DEFAULT_JAM.selesai));
+}
+
+function jamBatasMasuk() {
+  return menitKeJam(getBatasMasuk() ?? parseJam(DEFAULT_JAM.batasMasuk));
+}
+
+function jamBatasAlfa() {
+  return menitKeJam(getBatasAlfa() ?? parseJam(DEFAULT_JAM.batasAlfa));
 }
 
 // Ubah jam Date jadi menit sejak 00:00 WIB.
@@ -69,38 +100,84 @@ function menitDariTanggal(t) {
   return menitWIB(t);
 }
 
-// Tentukan status dari waktu absen, berdasar batas jam.
+// ── Jam operasional absen ──
+// Scan di luar jam sekolah dianggap TIDAK VALID -> ditolak.
+// Return { valid: bool, alasan: string|null }.
+function cekJamOperasional(date) {
+  const mulai = getJamMulai();
+  const selesai = getJamSelesai();
+  const menit = menitDariTanggal(date);
+
+  if (mulai !== null && menit < mulai) {
+    return { valid: false, alasan: "sebelum jam absen dibuka" };
+  }
+  // Tepat di jam tutup sudah dianggap lewat (jam 08:00 -> alfa, bukan terlambat).
+  if (selesai !== null && menit >= selesai) {
+    return { valid: false, alasan: "sudah lewat jam absen" };
+  }
+  return { valid: true, alasan: null };
+}
+
+// Tentukan status dari waktu scan berdasar batas jam masuk:
+//  - sebelum batas masuk       -> null (pakai default "Hadir")
+//  - tepat/setelah batas masuk -> "Terlambat"
 // Scan/absen yang berhasil = siswa memang hadir di sekolah, jadi paling jauh
-// hanya dianggap "Terlambat" -- tidak pernah otomatis "Tidak Hadir"
-// (status "Tidak Hadir" ditentukan manual oleh guru/admin).
-//  - sebelum/tepat batas masuk  -> "Hadir"
-//  - setelah batas masuk        -> "Terlambat"
-// Kalau batas masuk tidak diset (null) -> kembalikan null (pakai default "Hadir").
+// hanya "Terlambat" -- tidak pernah otomatis "Tidak Hadir".
 function statusDariJam(date) {
   const batasMasuk = getBatasMasuk();
   const menit = menitDariTanggal(date);
 
-  if (batasMasuk !== null && menit > batasMasuk) {
+  if (batasMasuk !== null && menit >= batasMasuk) {
     return "Terlambat";
   }
   return null; // belum lewat batas -> pakai status default
 }
 
-// Apakah waktu absen sudah melewati batas sesi/terakhir (buat info saja,
-// misal buat nandain "lewat jam masuk" di response).
+// Apakah waktu absen sudah melewati batas sesi/terakhir (buat info saja).
 function lewatBatasSesi(date) {
   const batasSesi = getBatasSesi();
   if (batasSesi === null) return false;
   return menitDariTanggal(date) > batasSesi;
 }
 
+// Terima "Alfa" dari ejaan apa pun: "alfa", "Alfa", "alpha", "Alpha".
+// Kembalikan null kalau bukan Izin/Sakit/Alfa.
+function normalkanKeterangan(value) {
+  if (!value) return null;
+  const v = String(value).trim();
+  if (!v) return null;
+  if (v.toLowerCase() === "alpha") return "Alfa"; // ejaan Inggris (UI lama)
+  const ketemu = KETERANGAN_VALID.find((k) => k.toLowerCase() === v.toLowerCase());
+  return ketemu || null;
+}
+
+// "Tidak Hadir" + "Alfa" -> "Tidak Hadir (Alfa)". Dipakai buat label di riwayat.
+function labelStatus(status, keterangan) {
+  if (!status) return null;
+  if (status === "Tidak Hadir" && keterangan) return `${status} (${keterangan})`;
+  return status;
+}
+
 module.exports = {
+  DEFAULT_JAM,
+  STATUS_VALID,
+  KETERANGAN_VALID,
+  STATUS_LEGACY,
   parseJam,
+  getJamMulai,
+  getJamSelesai,
   getBatasMasuk,
+  getBatasAlfa,
   getBatasSesi,
   cekJamOperasional,
   jamBuka,
   jamTutup,
+  jamBatasMasuk,
+  jamBatasAlfa,
+  menitKeJam,
   menitDariTanggal,
   statusDariJam,
+  lewatBatasSesi,
+  normalkanKeterangan,
+  labelStatus,
 };

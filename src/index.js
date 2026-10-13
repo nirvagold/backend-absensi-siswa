@@ -61,8 +61,8 @@ if (require.main === module) {
   });
 
   // ── Scheduler dalam-proses (fallback utk long-running process, mis. Railway) ──
-  // Menjalankan job alfa otomatis sekali sehari di jam masuk
-  // (ABSEN_BATAS_MASUK, default 9:00 WIB). Nonaktifkan dgn env JADWAL_JOBS=false.
+  // Menjalankan job alfa otomatis sekali sehari di jam alfa,
+  // (ABSEN_BATAS_ALFA, default 08:00 WIB). Nonaktifkan dgn env JADWAL_JOBS=false.
   // Pada Vercel (serverless), Vercel Cron-lah yang memanggil /api/cron/alfa.
   const { tandaiAlfaSemuaSekolah, batasMasukMenit } = require("./scripts/alfa");
   const { menitWIB, tanggalStrWIB } = require("./utils/waktu");
