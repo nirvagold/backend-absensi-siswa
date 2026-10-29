@@ -31,6 +31,13 @@ const KETERANGAN_VALID = ["Izin", "Sakit", "Alpha"];
 // Status lama yang masih diterima (data & frontend versi sebelumnya).
 const STATUS_LEGACY = ["Izin", "Sakit"];
 
+// Status yang dihitung "hadir di sekolah".
+// Terlambat tetap hadir -- cuma datangnya lewat batas jam masuk. Dipakai buat
+// persentase kehadiran (kartu dashboard, grafik tren, tabel per kelas) supaya
+// ketiganya pakai definisi yang sama persis. Jangan ditulis ulang di route;
+// impor dari sini biar angkanya ga beda-beda lagi.
+const STATUS_HADIR = ["Hadir", "Terlambat"];
+
 // Format env: "HH:MM" (24 jam). Kalau kosong/invalid, kembalikan null.
 function parseJam(value) {
   if (!value) return null;
@@ -162,6 +169,7 @@ module.exports = {
   STATUS_VALID,
   KETERANGAN_VALID,
   STATUS_LEGACY,
+  STATUS_HADIR,
   parseJam,
   getJamMulai,
   getJamSelesai,

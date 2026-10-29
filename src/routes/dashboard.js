@@ -3,6 +3,7 @@ const prisma = require("../config/prisma");
 const { authMiddleware } = require("../middleware/auth");
 const { dapodikResponse, errorResponse } = require("../utils/response");
 const { rentangHariWIB, awalHariWIBOffset, tanggalStrWIB } = require("../utils/waktu");
+const { STATUS_HADIR } = require("../config/absensi");
 
 const auth = authMiddleware();
 
@@ -49,6 +50,9 @@ router.get("/ringkasan", auth, async (req, res) => {
     // dipakai di kartu dashboard, biar konsisten sama ringkasan riwayat.
     const total_tidak_hadir = izin + sakit + alpha;
     // Siswa yang sudah tercatat hadir/terlambat hari ini.
+    // Ini juga angka "hadir" buat grafik tren & tabel per kelas: yang dihitung
+    // adalah siswa yang benar-benar hadir di sekolah (Hadir + Terlambat),
+    // sama seperti `status: { not: "Tidak Hadir" }` di dua endpoint itu.
     const sudah_absen = hadir + terlambat;
     // Siswa yang belum punya catatan apa pun (belum scan, belum ditandai alpha).
     const belum_absen = Math.max(0, total_siswa - sudah_absen - total_tidak_hadir);
@@ -72,8 +76,13 @@ router.get("/ringkasan", auth, async (req, res) => {
       total_tidak_hadir,
       sudah_absen,
       belum_absen,
-      persentase_hadir: total_siswa > 0 ? +((hadir / total_siswa) * 100).toFixed(2) : 0,
-      persentase_tidak_hadir: total_siswa > 0 ? +((total_tidak_hadir / total_siswa) * 100).toFixed(2) : 0,
+      // "hadir" yang dipakai buat hitungan persentase = Hadir + Terlambat.
+      // Terlambat tetap siswa yang hadir di sekolah, jadi tidak dikurangi dari
+      // persentase kehadiran (dulu dikurangi, makanya angkanya beda sama grafik).
+      hadir_hitung: sudah_absen,
+      // Konsisten sama `persentase` di /tren & /per-kelas: (Hadir + Terlambat) / total.
+      persentase_hadir: total_siswa > 0 ? +((sudah_absen / total_siswa) * 100).toFixed(1) : 0,
+      persentase_tidak_hadir: total_siswa > 0 ? +((total_tidak_hadir / total_siswa) * 100).toFixed(1) : 0,
     };
 
     res.json(dapodikResponse(data, { idField: "tanggal", limit: 1 }));
@@ -121,8 +130,15 @@ router.get("/tren", auth, async (req, res) => {
       const { awal: tgl, akhir: besok } = rentangHariWIB(awalHariWIBOffset(now, -i));
 
       const total = await prisma.siswa.count({ where: { sekolah_id: req.user.sekolah_id, is_active: true } });
+      // "Hadir" di grafik = siswa yang hadir di sekolah: Hadir + Terlambat.
+      // Ditulis eksplisit (bukan `not: "Tidak Hadir"`) supaya baris lama yang
+      // statusnya masih "Izin"/"Sakit" tidak ikut kehitung hadir.
       const hadirCount = await prisma.absensi.count({
-        where: { sekolah_id: req.user.sekolah_id, tanggal: { gte: tgl, lt: besok }, status: { not: "Tidak Hadir" } },
+        where: {
+          sekolah_id: req.user.sekolah_id,
+          tanggal: { gte: tgl, lt: besok },
+          status: { in: STATUS_HADIR },
+        },
       });
 
       data.push({
@@ -154,7 +170,7 @@ router.get("/per-kelas", auth, async (req, res) => {
       const hadirCount = await prisma.absensi.count({
         where: {
           tanggal: { gte: today, lt: besok },
-          status: { not: "Tidak Hadir" },
+          status: { in: STATUS_HADIR },
           siswa: { nama_rombel: k.nama_rombel },
         },
       });
