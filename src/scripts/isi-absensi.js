@@ -11,8 +11,11 @@
 //   node src/scripts/isi-absensi.js --tanggal=2026-10-14 --ya
 //   node src/scripts/isi-absensi.js --dari=2026-10-13 --sampai=2026-10-21 --ya
 //   node src/scripts/isi-absensi.js --ya --timpa           # tulis ulang termasuk data manual
-//   node src/scripts/isi-absensi.js --ya --hari-ini-saja   # lewati hari Sabtu/Minggu
+//   node src/scripts/isi-absensi.js --ya --ikut-libur      # ikut isi Sabtu/Minggu juga
 //   node src/scripts/isi-absensi.js --ya --sekolah=<uuid>  # pilih sekolah lain
+//
+// Sabtu & Minggu LIBUR: dilewati otomatis, karena sekolah tutup dan hari libur
+// memang tidak punya catatan absensi. Pakai --ikut-libur kalau memang butuh.
 //
 // Aturan yang dipakai (disamain sama alur scan & cron alpha asli):
 //   Hadir      metode "scan"   jam 06:00-06:59  keterangan null
@@ -33,7 +36,7 @@
 require("dotenv").config({ path: ".env.local" });
 require("dotenv").config();
 const prisma = require("../config/prisma");
-const { awalHariWIB, tanggalStrWIB, dariTanggalStr, waktuDariJamWIB } = require("../utils/waktu");
+const { awalHariWIB, tanggalStrWIB, dariTanggalStr, waktuDariJamWIB, akhirPekanWIB } = require("../utils/waktu");
 
 // ── Argumen ──
 function ambilArg(nama) {
@@ -43,7 +46,7 @@ function ambilArg(nama) {
 
 const EKSEKUSI = process.argv.includes("--ya");
 const TIMPA = process.argv.includes("--timpa");
-const HARI_INI_SAJA = process.argv.includes("--hari-ini-saja");
+const IKUT_LIBUR = process.argv.includes("--ikut-libur");
 const SEKOLAH_ID = ambilArg("sekolah");
 const TANGGAL = ambilArg("tanggal");
 const DARI = ambilArg("dari") || TANGGAL;
@@ -299,12 +302,18 @@ async function main() {
     hari = [sekarang];
   }
 
-  if (HARI_INI_SAJA) {
+  // Sabtu/Minggu libur -- tidak ada kegiatan belajar, jadi tidak boleh ada
+  // catatan absensi. Ini juga yang bikin grafik tren bersih tanpa batang nol.
+  if (!IKUT_LIBUR) {
     const sebelum = hari.length;
-    // getUTCDay(): nilai `tanggal` disimpan sebagai tengah malam UTC dari tanggal WIB.
-    hari = hari.filter((h) => h.getUTCDay() !== 0 && h.getUTCDay() !== 6);
+    hari = hari.filter((h) => !akhirPekanWIB(h));
+    const dilewatiLibur = sebelum - hari.length;
+    if (dilewatiLibur > 0) {
+      console.log(`Melewati ${dilewatiLibur} hari libur (Sabtu/Minggu). Pakai --ikut-libur kalau mau diisi.`);
+      console.log();
+    }
     if (!hari.length) {
-      console.log(`Semua ${sebelum} hari jatuh di Sabtu/Minggu (--hari-ini-saja), ga ada yang diisi.`);
+      console.log("Semua tanggal yang diminta jatuh di Sabtu/Minggu. Tidak ada yang diisi.");
       return;
     }
   }

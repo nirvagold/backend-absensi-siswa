@@ -2,7 +2,7 @@ const router = require("express").Router();
 const prisma = require("../config/prisma");
 const { authMiddleware } = require("../middleware/auth");
 const { dapodikResponse, errorResponse } = require("../utils/response");
-const { rentangHariWIB, awalHariWIBOffset, tanggalStrWIB } = require("../utils/waktu");
+const { rentangHariWIB, awalHariWIBOffset, tanggalStrWIB, akhirPekanWIB } = require("../utils/waktu");
 const { STATUS_HADIR } = require("../config/absensi");
 
 const auth = authMiddleware();
@@ -126,8 +126,18 @@ router.get("/tren", auth, async (req, res) => {
     const now = new Date();
     const data = [];
 
-    for (let i = 6; i >= 0; i--) {
-      const { awal: tgl, akhir: besok } = rentangHariWIB(awalHariWIBOffset(now, -i));
+    // Ambil 7 HARI SEKOLAH terakhir, bukan 7 hari kalender. Sabtu/Minggu libur
+    // dan memang tidak punya catatan absensi, jadi kalau ikut dihitung grafiknya
+    // cuma jadi deretan batang nol di ujung kanan.
+    const tanggalList = [];
+    for (let i = 0; tanggalList.length < 7 && i < 30; i++) {
+      const t = awalHariWIBOffset(now, -i);
+      if (akhirPekanWIB(t)) continue;
+      tanggalList.unshift(t);
+    }
+
+    for (const t of tanggalList) {
+      const { awal: tgl, akhir: besok } = rentangHariWIB(t);
 
       const total = await prisma.siswa.count({ where: { sekolah_id: req.user.sekolah_id, is_active: true } });
       // "Hadir" di grafik = siswa yang hadir di sekolah: Hadir + Terlambat.

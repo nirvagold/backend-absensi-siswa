@@ -46,6 +46,21 @@ function rentangHariWIB(date) {
   return { awal, akhir: new Date(awal.getTime() + 24 * 60 * 60 * 1000) };
 }
 
+// Hari ke berapa (0=Minggu .. 6=Sabtu) menurut kalender WIB.
+// `tanggal` disimpan sebagai tengah malam UTC dari tanggal WIB, jadi getUTCDay()
+// langsung memberi hari yang benar -- jangan pakai getDay() (ikut zona server).
+function hariKeWIB(date) {
+  return date.getUTCDay();
+}
+
+// Sabtu/Minggu = libur, tidak ada kegiatan belajar.
+// Dipakai cron alpha, grafik tren, dan skrip isi-absensi biar ketiganya
+// sepakat: hari libur tidak punya catatan absensi sama sekali.
+function akhirPekanWIB(date) {
+  const h = hariKeWIB(date);
+  return h === 0 || h === 6;
+}
+
 // Parse "YYYY-MM-DD" dari query jadi nilai `tanggal` tersimpan. Invalid -> null.
 function dariTanggalStr(str) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(str || ""))) return null;
@@ -69,6 +84,8 @@ module.exports = {
   awalHariWIB,
   awalHariWIBOffset,
   rentangHariWIB,
+  hariKeWIB,
+  akhirPekanWIB,
   dariTanggalStr,
   waktuDariJamWIB,
 };

@@ -10,7 +10,7 @@
 // endpoint update absensi (ubah kolom keterangan pada record yang sama).
 
 const prisma = require("../config/prisma");
-const { rentangHariWIB, waktuDariJamWIB } = require("../utils/waktu");
+const { rentangHariWIB, waktuDariJamWIB, akhirPekanWIB } = require("../utils/waktu");
 const { getBatasAlpha } = require("../config/absensi");
 
 // Ambil semua sekolah (dipakai cron & scheduler)
@@ -33,6 +33,20 @@ async function tandaiAlphaSekolah(sekolahId, tgl) {
     where: { sekolah_id: sekolahId },
     select: { npsn: true, nama: true },
   });
+
+  // Sabtu/Minggu libur -- tidak ada jadwal, jangan tandai siapa pun alpha.
+  // Tanpa ini, Vercel Cron & scheduler dalam-proses bakal mengisi baris Alpha
+  // buat semua siswa tiap akhir pekan, padahal sekolah tutup.
+  if (akhirPekanWIB(tgl)) {
+    return {
+      sekolah_id: sekolahId,
+      sekolah_nama: sekolah?.nama || sekolah?.npsn || null,
+      total_siswa: 0,
+      sudah_absen: 0,
+      ditandai: 0,
+      libur: true,
+    };
+  }
 
   const today = new Date(tgl);
   const { awal: awalHari, akhir: akhirHari } = rentangHariWIB(today);
