@@ -65,9 +65,11 @@ const BATAS_TUTUP = 480; // 08:00
 const POTONG = 60;
 const POTONG_HAPUS = 200;
 
-// Sebaran jenis ketidakhadiran. Totalnya ~9% dari siswa per hari, angka yang
-// wajar buat sekolah dasar dan bikin persentase kehadiran berkisar 90-92%.
-const RASIO = { izin: 0.033, sakit: 0.026, alpha: 0.026 };
+// Sebaran jenis ketidakhadiran. Totalnya ~7% dari siswa per hari, bikin
+// persentase kehadiran berkisar 92-94%. Alpha cuma 1%: siswa yang ga izin
+// ga sakit tapi tetap ga masuk itu jarang, dan alpha banyak bikin dashboard
+// kelihatan jelek di presentasi.
+const RASIO = { izin: 0.033, sakit: 0.026, alpha: 0.01 };
 
 // ── Acak yang bisa diulang ──
 // FNV-1a: hash sederhana yang hasilnya sama tiap kali dijalankan.
