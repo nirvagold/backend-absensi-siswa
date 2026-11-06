@@ -242,13 +242,20 @@ async function isiSatuHari(sekolah, siswaList, tanggal, eksekusi) {
 
   // Hapus baris lama dulu. WAJIB sebelum insert: ada unique (peserta_didik_id, tanggal),
   // jadi bikin baris baru selagi yang lama masih ada bakal ditolak.
+  // notifikasi_log ngacu ke absensi (RESTRICT) -- log buat baris yang diganti
+  // harus dihapus duluan, sama seperti urutan hapus di dummy.js. Tanpa ini,
+  // baris yang pernah dikirimin notifikasi WA bakal gagal dihapus.
   let dihapus = 0;
+  let dihapusLog = 0;
   for (let i = 0; i < diganti.length; i += POTONG_HAPUS) {
     const potong = diganti.slice(i, i + POTONG_HAPUS);
+    const log = await prisma.notifikasi_log.deleteMany({ where: { absensi_id: { in: potong } } });
+    dihapusLog += log.count;
     const r = await prisma.absensi.deleteMany({ where: { absensi_id: { in: potong } } });
     dihapus += r.count;
   }
   hasil.dihapus = dihapus;
+  hasil.dihapusLog = dihapusLog;
 
   // Insert per potongan, biar ga kena batas waktu koneksi Neon.
   for (let i = 0; i < baru.length; i += POTONG) {
