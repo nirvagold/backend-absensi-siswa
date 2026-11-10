@@ -528,9 +528,20 @@ router.get("/laporan/semester", auth, async (req, res) => {
     }
 
     // Guru: batasi ke kelas yang diampu. Peran lain: seluruh sekolah.
+    // Guru yang akunnya belum diisi kelas (nama_rombel kosong) tidak punya
+    // cakupan apa pun -- tolak 403 dengan pesan jelas, bukan laporan kosong
+    // yang bikin bingung.
     let kelasList = null;
-    if (req.user.peran_id_str === "Guru" && req.user.nama_rombel) {
-      kelasList = req.user.nama_rombel.split(",").map((s) => s.trim()).filter(Boolean);
+    if (req.user.peran_id_str === "Guru") {
+      kelasList = (req.user.nama_rombel || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (kelasList.length === 0) {
+        return res.status(403).json(
+          errorResponse("Akun Anda belum ditetapkan kelas yang diampu. Hubungi Admin untuk mengisi kelas pada akun Anda.", "FORBIDDEN_ACCESS", 403)
+        );
+      }
     }
 
     const sekolah = await prisma.sekolah.findUnique({ where: { sekolah_id: req.user.sekolah_id } });

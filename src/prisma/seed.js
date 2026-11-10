@@ -63,6 +63,22 @@ async function main() {
 
   console.log(`✅ Guru: ${guru.username} / guru123`);
 
+  // Buat user kepala sekolah (pemantau, akses laporan semester)
+  const passKepsek = await bcrypt.hash("kepsek123", 12);
+  const kepsek = await prisma.users.upsert({
+    where: { username: "kepsek@sekolah.sch.id" },
+    update: {},
+    create: {
+      sekolah_id: sekolah.sekolah_id,
+      username: "kepsek@sekolah.sch.id",
+      password_hash: passKepsek,
+      nama: "Kepala Sekolah SDN 2 Garumukti",
+      peran_id_str: "Kepala Sekolah",
+    },
+  });
+
+  console.log(`✅ Kepala Sekolah: ${kepsek.username} / kepsek123`);
+
   console.log("🎉 Seeding selesai!");
 }
 
