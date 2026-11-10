@@ -513,8 +513,10 @@ router.delete("/:id", auth, async (req, res) => {
 // GET /api/absensi/laporan/semester?format=pdf|excel&semester=ganjil|genap&tahun=YYYY
 // Laporan semester: rekap per kelas, satu baris per siswa, kolom Sakit/Izin/Alpha
 // semester itu -- jadi acuan, bukan cetakan semua catatan absensi.
-// Semua peran boleh mengunduh (Admin, Guru, Kepala Sekolah). Laporan hanya
-// membaca dan datanya sekolah yang sama, jadi tidak ada alasan membatasi.
+// Semua peran boleh mengunduh, tapi Guru cuma dapat kelas yang diampunya
+// (sama seperti pembatasan kelas di dashboard & daftar siswa): kelas diambil
+// dari `nama_rombel` pada akunnya, bisa lebih dari satu dipisah ", ".
+// Admin & Kepala Sekolah dapat seluruh sekolah.
 router.get("/laporan/semester", auth, async (req, res) => {
   try {
     const { format, semester, tahun } = req.query;
@@ -525,8 +527,14 @@ router.get("/laporan/semester", auth, async (req, res) => {
       );
     }
 
+    // Guru: batasi ke kelas yang diampu. Peran lain: seluruh sekolah.
+    let kelasList = null;
+    if (req.user.peran_id_str === "Guru" && req.user.nama_rombel) {
+      kelasList = req.user.nama_rombel.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+
     const sekolah = await prisma.sekolah.findUnique({ where: { sekolah_id: req.user.sekolah_id } });
-    const rekap = await ambilRekap(prisma, req.user.sekolah_id, rentang);
+    const rekap = await ambilRekap(prisma, req.user.sekolah_id, rentang, kelasList);
     const dicetakOleh = req.user.nama;
     const namaFile = `laporan-semester-${rentang.semester}-${rentang.tahunAjaran.replace("/", "-")}`;
 

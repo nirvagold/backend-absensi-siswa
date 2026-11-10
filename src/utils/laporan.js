@@ -62,10 +62,16 @@ function keteranganBaris(b) {
 }
 
 // Rekap per kelas: roster lengkap + hitungan Sakit/Izin/Alpha per siswa.
-async function ambilRekap(prisma, sekolahId, rentang) {
+// `kelasList` (opsional): daftar nama_rombel yang boleh dilaporkan --
+// dipakai buat Guru yang cuma mengampu kelas tertentu. Null/kosong = semua kelas.
+async function ambilRekap(prisma, sekolahId, rentang, kelasList) {
+  const filterKelas = Array.isArray(kelasList) && kelasList.length > 0
+    ? { nama_rombel: { in: kelasList } }
+    : {};
+
   const [siswaList, rekap] = await Promise.all([
     prisma.siswa.findMany({
-      where: { sekolah_id: sekolahId, is_active: true },
+      where: { sekolah_id: sekolahId, is_active: true, ...filterKelas },
       select: { peserta_didik_id: true, nisn: true, nama: true, nama_rombel: true },
       orderBy: [{ nama_rombel: "asc" }, { nama: "asc" }],
     }),
