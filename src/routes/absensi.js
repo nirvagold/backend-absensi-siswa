@@ -15,6 +15,13 @@ const {
 } = require("../config/absensi");
 const { rentangHariWIB, jamStrWIB, tanggalStrWIB, dariTanggalStr } = require("../utils/waktu");
 const { kirimWA, buatPesanAbsen, catatLog, waOtomatis } = require("./notifikasi");
+const {
+  semesterBerjalan,
+  rentangSemester,
+  ambilRekap,
+  buatExcelLaporan,
+  buatPdfLaporan,
+} = require("../utils/laporan");
 
 const auth = authMiddleware();
 const guruAuth = authMiddleware(["Admin", "Guru"]);
@@ -503,4 +510,46 @@ router.delete("/:id", auth, async (req, res) => {
   }
 });
 
+// GET /api/absensi/laporan/semester?format=pdf|excel&semester=ganjil|genap&tahun=YYYY
+// Laporan semester buat Kepala Sekolah (Admin juga boleh, misal bantu cetak).
+// Rekap per kelas: satu baris per siswa, kolom Sakit/Izin/Alpha semester itu --
+// jadi acuan, bukan cetakan semua catatan absensi.
+//
+// Didaftarkan SETELAH /:id DELETE di atas? Tidak masalah: Express mencocokkan
+// GET /laporan/semester sebelum GET /siswa/:id karena path-nya lebih spesifik
+// DAN /:id di sini hanya untuk PUT/DELETE, bukan GET.
+router.get("/laporan/semester", authMiddleware(["Admin", "Kepala Sekolah"]), async (req, res) => {
+  try {
+    const { format, semester, tahun } = req.query;
+    const rentang = rentangSemester({ semester, tahun });
+    if (!rentang) {
+      return res.status(400).json(
+        errorResponse("Semester/tahun tidak valid. Pakai semester=ganjil|genap & tahun=YYYY", "VALIDATION_ERROR", 400)
+      );
+    }
+
+    const sekolah = await prisma.sekolah.findUnique({ where: { sekolah_id: req.user.sekolah_id } });
+    const rekap = await ambilRekap(prisma, req.user.sekolah_id, rentang);
+    const dicetakOleh = req.user.nama;
+    const namaFile = `laporan-semester-${rentang.semester}-${rentang.tahunAjaran.replace("/", "-")}`;
+
+    if (format === "excel") {
+      const buffer = buatExcelLaporan({ sekolah, rentang, rekap, dicetakOleh });
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename=${namaFile}.xlsx`);
+      return res.send(buffer);
+    }
+
+    const doc = await buatPdfLaporan({ sekolah, rentang, rekap, dicetakOleh });
+    const pdfBytes = await doc.save();
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename=${namaFile}.pdf`);
+    return res.send(Buffer.from(pdfBytes));
+  } catch (err) {
+    console.error("Laporan semester error:", err);
+    res.status(500).json(errorResponse("Gagal membuat laporan semester", "INTERNAL_ERROR", 500));
+  }
+});
+
 module.exports = router;
+
