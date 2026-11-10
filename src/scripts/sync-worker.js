@@ -198,29 +198,45 @@ async function langkahUtama() {
     return { kerja: true, sync_id: kandidat.sync_id, hasil: "selesai (tidak ada kelas)" };
   }
 
-  const kelasIni = antrianEfektif[0];
-  const sisa = antrianEfektif.slice(1);
+  // 4. Proses kelas berikutnya BERULANG sampai selesai atau waktu hampir habis.
+  //    Vercel Hobby: maxDuration 60s (vercel.json) & cron hanya boleh harian,
+  //    jadi SATU invokasi harus sanggup menyelesaikan seluruh sync. Budget
+  //    50s disisakan 10s untuk pengguna+rombel+respons.
+  const MULAI = Date.now();
+  const BUDGET_MS = 50 * 1000;
+  const catatan = [];
+  let sisa = antrianEfektif;
 
-  const hasil = await prosesKelas(semua, kelasIni, kandidat.sekolah_id, kandidat.sync_id);
-  await tambahProgres(kandidat.sync_id, {
-    total: hasil.barisKelas, baru: hasil.baru, update: hasil.update,
-    gagal: hasil.gagal, daftarGagal: hasil.daftarGagal,
-  });
-
-  // 4. Lanjut atau selesai?
-  if (sisa.length > 0) {
-    await prisma.sync_log.update({
-      where: { sync_id: kandidat.sync_id },
-      data: { kelas_proses: sisa.join("||") },
+  while (sisa.length > 0 && Date.now() - MULAI < BUDGET_MS) {
+    const kelasIni = sisa[0];
+    const hasil = await prosesKelas(semua, kelasIni, kandidat.sekolah_id, kandidat.sync_id);
+    await tambahProgres(kandidat.sync_id, {
+      total: hasil.barisKelas, baru: hasil.baru, update: hasil.update,
+      gagal: hasil.gagal, daftarGagal: hasil.daftarGagal,
     });
+    catatan.push(`kelas ${kelasIni}: +${hasil.baru} baru, ${hasil.update} update, ${hasil.gagal} gagal`);
+    sisa = sisa.slice(1);
+
+    if (sisa.length > 0) {
+      // Simpan sisa antrian SETIAP kelas -- kalau function tetap di-kill
+      // (mis. cold start makan waktu), job tidak bolong dari awal lagi.
+      await prisma.sync_log.update({
+        where: { sync_id: kandidat.sync_id },
+        data: { kelas_proses: sisa.join("||") },
+      });
+    }
+  }
+
+  // 5. Masih ada sisa dan waktu habis -> serahkan ke invokasi berikutnya.
+  //    (Pada praktiknya dengan 301 siswa / 12 kelas, satu invokasi 60s cukup.)
+  if (sisa.length > 0) {
     return {
       kerja: true, sync_id: kandidat.sync_id,
-      hasil: `kelas ${kelasIni}: +${hasil.baru} baru, ${hasil.update} update, ${hasil.gagal} gagal; sisa ${sisa.length} kelas`,
+      hasil: catatan.join("; ") + `; WAKTU HABIS, sisa ${sisa.length} kelas (cron berikutnya lanjut)`,
     };
   }
 
-  // Kelas terakhir selesai. Lanjut pengguna & rombel kalau tipenya "all".
-  let catatan = `kelas ${kelasIni}: +${hasil.baru} baru, ${hasil.update} update, ${hasil.gagal} gagal`;
+  // Semua kelas selesai. Lanjut pengguna & rombel kalau tipenya "all".
   if (param.tipe === "pengguna" || param.tipe === "all") {
     const users = await panggilDapodik(param.baseUrl, "getPengguna", { npsn: param.npsn }, param.token);
     const hash = await bcrypt.hash("dapodik123", 12);
@@ -246,7 +262,7 @@ async function langkahUtama() {
         }
       } catch { gagalU++; }
     }
-    catatan += `; pengguna +${baruU} baru, ${gagalU} gagal`;
+    catatan.push(`; pengguna +${baruU} baru, ${gagalU} gagal`);
   }
 
   if (param.tipe === "rombongan_belajar" || param.tipe === "all") {
@@ -268,7 +284,7 @@ async function langkahUtama() {
         }
       } catch { gagalR++; }
     }
-    catatan += `; rombel ${cocok} cocok, ${gagalR} gagal`;
+    catatan.push(`; rombel ${cocok} cocok, ${gagalR} gagal`);
   }
 
   await prisma.sync_log.update({
@@ -276,7 +292,7 @@ async function langkahUtama() {
     data: { status: "berhasil", tahap: "selesai", kelas_proses: null, waktu_selesai: new Date() },
   });
 
-  return { kerja: true, sync_id: kandidat.sync_id, hasil: catatan + "; SELESAI" };
+  return { kerja: true, sync_id: kandidat.sync_id, hasil: catatan.join("; ") + "; SELESAI" };
 }
 
 module.exports = { langkahUtama, UMUR_MINIMUM_MS, UMUR_ZOMBI_MS };
