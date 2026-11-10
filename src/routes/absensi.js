@@ -511,14 +511,11 @@ router.delete("/:id", auth, async (req, res) => {
 });
 
 // GET /api/absensi/laporan/semester?format=pdf|excel&semester=ganjil|genap&tahun=YYYY
-// Laporan semester buat Kepala Sekolah (Admin juga boleh, misal bantu cetak).
-// Rekap per kelas: satu baris per siswa, kolom Sakit/Izin/Alpha semester itu --
-// jadi acuan, bukan cetakan semua catatan absensi.
-//
-// Didaftarkan SETELAH /:id DELETE di atas? Tidak masalah: Express mencocokkan
-// GET /laporan/semester sebelum GET /siswa/:id karena path-nya lebih spesifik
-// DAN /:id di sini hanya untuk PUT/DELETE, bukan GET.
-router.get("/laporan/semester", authMiddleware(["Admin", "Kepala Sekolah"]), async (req, res) => {
+// Laporan semester: rekap per kelas, satu baris per siswa, kolom Sakit/Izin/Alpha
+// semester itu -- jadi acuan, bukan cetakan semua catatan absensi.
+// Semua peran boleh mengunduh (Admin, Guru, Kepala Sekolah). Laporan hanya
+// membaca dan datanya sekolah yang sama, jadi tidak ada alasan membatasi.
+router.get("/laporan/semester", auth, async (req, res) => {
   try {
     const { format, semester, tahun } = req.query;
     const rentang = rentangSemester({ semester, tahun });
