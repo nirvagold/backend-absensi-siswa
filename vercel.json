@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/alpha",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/sync",
+      "schedule": "* * * * *"
     }
   ]
 }

@@ -8,6 +8,7 @@
 
 const router = require("express").Router();
 const { tandaiAlphaSemuaSekolah } = require("../scripts/alpha");
+const { langkahUtama } = require("../scripts/sync-worker");
 const { errorResponse } = require("../utils/response");
 
 function cekSecret(req, res, next) {
@@ -44,6 +45,21 @@ router.get("/alpha", cekSecret, async (req, res) => {
   } catch (err) {
     console.error("Cron alpha error:", err);
     res.status(500).json(errorResponse("Gagal menjalankan cron alpha", "INTERNAL_ERROR", 500));
+  }
+});
+
+// GET /api/cron/sync — worker sinkronisasi Dapodik.
+// Dipanggil Vercel Cron tiap 1 menit (lihat vercel.json). Satu invokasi =
+// SATU kelas diproses, jadi selalu jauh di bawah batas maxDuration 10s.
+// Frontend tidak perlu tahu endpoint ini: progres dia pantau lewat
+// GET /api/sync/dapodik/status/:id yang membaca sync_log.
+router.get("/sync", cekSecret, async (req, res) => {
+  try {
+    const hasil = await langkahUtama();
+    res.json({ success: true, data: hasil });
+  } catch (err) {
+    console.error("Cron sync error:", err.message);
+    res.status(500).json(errorResponse("Worker sync gagal", "SYNC_FAILED", 500));
   }
 });
 
