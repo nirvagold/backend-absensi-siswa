@@ -189,12 +189,19 @@ router.post("/manual", guruAuth, async (req, res) => {
 
     const { awal: today, akhir: besok } = rentangHariWIB(new Date());
 
-    // Cek dulu udah absen apa belum
+    // Cek dulu udah absen apa belum.
+    // Alpha otomatis (metode "sistem" + keterangan "Alpha") boleh diganti:
+    // cron menandai alpha jam 08:00, lalu guru input izin/sakit jam 09:00
+    // harus BISA -- kalau tidak, izin/sakit tak pernah bisa dicatat setelah
+    // jam alpha lewat. Pola sama dengan /scan.
     const existing = await prisma.absensi.findFirst({
       where: { peserta_didik_id, tanggal: { gte: today, lt: besok } },
     });
 
-    if (existing) {
+    const alphaOtomatis =
+      existing && existing.metode === "sistem" && existing.keterangan === "Alpha";
+
+    if (existing && !alphaOtomatis) {
       return res.status(409).json({
         success: false,
         message: `Siswa sudah absen hari ini dengan status ${existing.status}`,
@@ -203,7 +210,18 @@ router.post("/manual", guruAuth, async (req, res) => {
       });
     }
 
-    const absen = await prisma.absensi.create({
+    const absen = alphaOtomatis
+      ? await prisma.absensi.update({
+          where: { absensi_id: existing.absensi_id },
+          data: {
+            waktu_absen: new Date(),
+            status,
+            metode: "manual",
+            keterangan: keterangan || null,
+            petugas_id: req.user.pengguna_id,
+          },
+        })
+      : await prisma.absensi.create({
       data: {
         peserta_didik_id,
         sekolah_id: req.user.sekolah_id,
